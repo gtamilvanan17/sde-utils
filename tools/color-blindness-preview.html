@@ -1,0 +1,138 @@
+<!-- =========================================================================
+     SDE Utils — tools/color-blindness-preview.html
+     Simulate protanopia/deuteranopia/tritanopia on a color or sample palette.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-eye"></i></div>
+  <div class="tool-header-text">
+    <h1>Color Blindness Preview</h1>
+    <p>Simulate how a color or palette appears under protanopia, deuteranopia and tritanopia using LMS color-space transforms.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="cb-color" style="margin:0 var(--sp-2) 0 0">Color</label>
+    <input type="color" id="cb-color" value="#3b82f6" style="width:44px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer;">
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="addcolor"><i class="bi bi-plus-lg"></i> Add to palette</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="reset"><i class="bi bi-arrow-counterclockwise"></i> Reset sample palette</button>
+  </div>
+
+  <div id="cb-palette" class="cb-palette"></div>
+
+  <div id="cb-results" class="cb-results"></div>
+</div>
+
+<style>
+  .cb-palette { display:flex; gap:var(--sp-2); flex-wrap:wrap; margin:var(--sp-3) 0 var(--sp-4); }
+  .cb-chip { width:36px; height:36px; border-radius:var(--radius-sm); border:1px solid var(--border); cursor:pointer; position:relative; }
+  .cb-chip .bi { position:absolute; top:-6px; right:-6px; background:var(--surface); border-radius:50%; font-size:12px; color:var(--danger); display:none; }
+  .cb-chip:hover .bi { display:block; }
+  .cb-results { display:flex; flex-direction:column; gap:var(--sp-3); }
+  .cb-row-label { font-size:var(--fs-sm); font-weight:var(--fw-semibold); color:var(--text); margin-bottom:var(--sp-1); }
+  .cb-swatches { display:grid; grid-template-columns:repeat(4, 1fr); gap:var(--sp-2); }
+  .cb-swatch { height:56px; border-radius:var(--radius-sm); border:1px solid var(--border); display:flex; align-items:flex-end; padding:var(--sp-1); }
+  .cb-swatch span { font-size:10px; background:rgba(0,0,0,0.45); color:#fff; padding:1px 4px; border-radius:3px; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['color-blindness-preview'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var colorEl = $('#cb-color', root);
+    var paletteEl = $('#cb-palette', root);
+    var resultsEl = $('#cb-results', root);
+
+    var DEFAULT_PALETTE = ['#ef4444', '#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6'];
+    var palette = DEFAULT_PALETTE.slice();
+
+    // Simulation matrices (Brettel/Vienot-style approximations) applied in linear RGB.
+    var MATRICES = {
+      protanopia: [
+        [0.567, 0.433, 0.000],
+        [0.558, 0.442, 0.000],
+        [0.000, 0.242, 0.758]
+      ],
+      deuteranopia: [
+        [0.625, 0.375, 0.000],
+        [0.700, 0.300, 0.000],
+        [0.000, 0.300, 0.700]
+      ],
+      tritanopia: [
+        [0.950, 0.050, 0.000],
+        [0.000, 0.433, 0.567],
+        [0.000, 0.475, 0.525]
+      ]
+    };
+
+    function hexToRgb(hex) {
+      var h = hex.replace('#','');
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+    function rgbToHex(r,g,b) {
+      var toHex = function (v) { return Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0'); };
+      return '#' + toHex(r) + toHex(g) + toHex(b);
+    }
+
+    function simulate(hex, matrix) {
+      var rgb = hexToRgb(hex);
+      var r = rgb[0], g = rgb[1], b = rgb[2];
+      var nr = r*matrix[0][0] + g*matrix[0][1] + b*matrix[0][2];
+      var ng = r*matrix[1][0] + g*matrix[1][1] + b*matrix[1][2];
+      var nb = r*matrix[2][0] + g*matrix[2][1] + b*matrix[2][2];
+      return rgbToHex(nr, ng, nb);
+    }
+
+    function renderPaletteChips() {
+      paletteEl.innerHTML = '';
+      palette.forEach(function (hex, i) {
+        paletteEl.appendChild(el('div', {
+          class: 'cb-chip', style: 'background:' + hex, title: hex + ' (click to remove)',
+          onclick: function () { palette.splice(i, 1); renderPaletteChips(); renderResults(); }
+        }, [ el('i', { class: 'bi bi-x-circle-fill' }) ]));
+      });
+    }
+
+    function renderResults() {
+      resultsEl.innerHTML = '';
+      if (!palette.length) {
+        resultsEl.appendChild(el('div', { class: 'field-hint', text: 'Add a color to see the simulation.' }));
+        return;
+      }
+      var rowLabel = el('div', { class: 'cb-row-label', text: 'Original' });
+      var origSwatches = el('div', { class: 'cb-swatches' }, palette.map(function (hex) {
+        return el('div', { class: 'cb-swatch', style: 'background:' + hex }, [ el('span', { text: hex }) ]);
+      }));
+      resultsEl.appendChild(rowLabel);
+      resultsEl.appendChild(origSwatches);
+
+      Object.keys(MATRICES).forEach(function (name) {
+        var label = el('div', { class: 'cb-row-label', text: name.charAt(0).toUpperCase() + name.slice(1) });
+        var swatches = el('div', { class: 'cb-swatches' }, palette.map(function (hex) {
+          var sim = simulate(hex, MATRICES[name]);
+          return el('div', { class: 'cb-swatch', style: 'background:' + sim, title: sim }, [ el('span', { text: sim }) ]);
+        }));
+        resultsEl.appendChild(label);
+        resultsEl.appendChild(swatches);
+      });
+    }
+
+    var actions = {
+      addcolor: function () {
+        var hex = colorEl.value;
+        if (palette.indexOf(hex) === -1) { palette.push(hex); renderPaletteChips(); renderResults(); }
+        else SDEUtils.toast('Color already in palette', 'info');
+      },
+      reset: function () { palette = DEFAULT_PALETTE.slice(); renderPaletteChips(); renderResults(); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    renderPaletteChips();
+    renderResults();
+  };
+</script>

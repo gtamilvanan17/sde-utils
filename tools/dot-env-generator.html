@@ -1,0 +1,119 @@
+<!-- =========================================================================
+     SDE Utils — tools/dot-env-generator.html
+     Build .env files from key/value rows — copy or download.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-file-earmark-code"></i></div>
+  <div class="tool-header-text">
+    <h1>.env Generator</h1>
+    <p>Scaffold .env files from key/value pairs. Values with spaces or special characters are auto-quoted.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="field">
+    <label class="field-label">Variables</label>
+    <div id="dev-rows"></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="addrow"><i class="bi bi-plus-lg"></i> Add row</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="clear"><i class="bi bi-x-circle"></i> Clear all</button>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="dev-output">Preview <span class="field-hint">(.env)</span></label>
+    <textarea id="dev-output" class="textarea-sde-utils" style="min-height:200px" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download .env</button>
+  </div>
+
+  <div class="stat-row" id="dev-stats"></div>
+</div>
+
+<style>
+  .dev-row { display:flex; gap:var(--sp-2); align-items:center; margin-bottom:var(--sp-2); }
+  .dev-row .input-sde-utils { flex:1; }
+  .dev-row .dev-key { flex:0 0 40%; font-family: var(--font-mono, monospace); text-transform: uppercase; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['dot-env-generator'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, $$ = SDEUtils.$$, el = SDEUtils.el;
+
+    var rowsEl = $('#dev-rows', root);
+    var output = $('#dev-output', root);
+    var stats = $('#dev-stats', root);
+
+    function addRow(key, value) {
+      var row = el('div', { class: 'dev-row' }, [
+        el('input', { class: 'input-sde-utils dev-key', placeholder: 'KEY', value: key || '' }),
+        el('input', { class: 'input-sde-utils dev-value', placeholder: 'value', value: value || '' }),
+        el('button', {
+          class: 'icon-btn', type: 'button', title: 'Remove',
+          onclick: function () { row.remove(); render(); }
+        }, [ el('i', { class: 'bi bi-trash' }) ])
+      ]);
+      rowsEl.appendChild(row);
+      SDEUtils.on($('.dev-key', row), 'input', render);
+      SDEUtils.on($('.dev-value', row), 'input', render);
+      return row;
+    }
+
+    function needsQuoting(v) {
+      return /[\s"'#$]/.test(v);
+    }
+
+    function quote(v) {
+      if (!needsQuoting(v)) return v;
+      return '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    }
+
+    function render() {
+      var lines = [];
+      var count = 0;
+      $$('.dev-row', rowsEl).forEach(function (row) {
+        var key = $('.dev-key', row).value.trim().replace(/\s+/g, '_').toUpperCase();
+        var value = $('.dev-value', row).value;
+        if (!key) return;
+        lines.push(key + '=' + quote(value));
+        count++;
+      });
+      var text = lines.join('\n');
+      output.value = text;
+      stats.innerHTML = '';
+      stats.appendChild(el('span', { class: 'stat-chip' }, [
+        el('i', { class: 'bi bi-list-check' }),
+        document.createTextNode(' ' + count + ' variables')
+      ]));
+      return text;
+    }
+
+    var actions = {
+      addrow: function () { addRow(); render(); },
+      clear: function () { rowsEl.innerHTML = ''; render(); },
+      copy: function () {
+        var text = render();
+        text ? SDEUtils.copy(text) : SDEUtils.toast('Add some variables first', 'info');
+      },
+      download: function () {
+        var text = render();
+        text ? SDEUtils.download('.env', text) : SDEUtils.toast('Nothing to download', 'info');
+      }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    addRow('DATABASE_URL', 'postgres://user:pass@localhost:5432/app');
+    addRow('API_KEY', 'change_me');
+    addRow('NODE_ENV', 'development');
+    render();
+  };
+</script>

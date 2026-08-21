@@ -1,0 +1,157 @@
+<!-- =========================================================================
+     SDE Utils — tools/cron-generator.html
+     Build a cron expression visually from a simple form.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-clock-history"></i></div>
+  <div class="tool-header-text">
+    <h1>Cron Generator</h1>
+    <p>Build a cron expression visually — pick minute, hour, day, month and weekday, and get a human-readable summary.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="cg-minute">Minute</label>
+      <input type="text" id="cg-minute" class="input-sde-utils" value="*" spellcheck="false">
+    </div>
+    <div class="field">
+      <label class="field-label" for="cg-hour">Hour</label>
+      <input type="text" id="cg-hour" class="input-sde-utils" value="*" spellcheck="false">
+    </div>
+  </div>
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="cg-dom">Day of month</label>
+      <input type="text" id="cg-dom" class="input-sde-utils" value="*" spellcheck="false">
+    </div>
+    <div class="field">
+      <label class="field-label" for="cg-month">Month</label>
+      <input type="text" id="cg-month" class="input-sde-utils" value="*" spellcheck="false">
+    </div>
+  </div>
+  <div class="field">
+    <label class="field-label" for="cg-dow">Day of week</label>
+    <input type="text" id="cg-dow" class="input-sde-utils" value="*" spellcheck="false">
+  </div>
+
+  <div class="toolbar">
+    <span class="field-hint">Presets:</span>
+    <button class="btn-sde-utils btn-sde-utils-ghost btn-sde-utils-sm" data-preset="* * * * *">Every minute</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost btn-sde-utils-sm" data-preset="0 * * * *">Hourly</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost btn-sde-utils-sm" data-preset="0 0 * * *">Daily at midnight</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost btn-sde-utils-sm" data-preset="0 9 * * 1-5">Weekdays at 9am</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost btn-sde-utils-sm" data-preset="0 0 1 * *">Monthly (1st)</button>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="cg-output">Cron expression</label>
+    <input type="text" id="cg-output" class="input-sde-utils" readonly style="font-family:var(--font-mono, monospace); font-weight:var(--fw-semibold);">
+  </div>
+
+  <div id="cg-summary" class="info-box"></div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy</button>
+  </div>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['cron-generator'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$;
+
+    var minuteEl = $('#cg-minute', root), hourEl = $('#cg-hour', root), domEl = $('#cg-dom', root);
+    var monthEl = $('#cg-month', root), dowEl = $('#cg-dow', root);
+    var outputEl = $('#cg-output', root), summaryEl = $('#cg-summary', root);
+
+    var DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    function fieldValid(v, min, max) {
+      if (v === '*') return true;
+      return v.split(',').every(function (part) {
+        var step = part.split('/');
+        var base = step[0];
+        if (step.length > 1 && (!/^\d+$/.test(step[1]) || step[1] === '0')) return false;
+        if (base === '*') return true;
+        var range = base.split('-');
+        return range.every(function (n) { return /^\d+$/.test(n) && +n >= min && +n <= max; }) &&
+          (range.length === 1 || +range[0] <= +range[1]);
+      });
+    }
+
+    function describeField(v, names, min) {
+      if (v === '*') return null;
+      return v.split(',').map(function (part) {
+        var stepParts = part.split('/');
+        var base = stepParts[0], step = stepParts[1];
+        var text;
+        if (base === '*') text = 'every ' + (names ? '' : '') + (step ? step + (names ? ' units' : '') : '');
+        else if (base.indexOf('-') !== -1) {
+          var r = base.split('-').map(Number);
+          text = names ? (names[r[0]] + '–' + names[r[1]]) : (r[0] + '–' + r[1]);
+        } else {
+          text = names ? names[+base] : base;
+        }
+        if (step) text += ' (every ' + step + ')';
+        return text;
+      }).join(', ');
+    }
+
+    function summarize(min, hr, dom, mon, dow) {
+      var parts = [];
+      if (min === '*' && hr === '*') parts.push('Every minute');
+      else if (min !== '*' && hr !== '*' && min.indexOf(',') === -1 && hr.indexOf(',') === -1 && min.indexOf('-') === -1 && hr.indexOf('-') === -1 && !/\//.test(min) && !/\//.test(hr)) {
+        parts.push('At ' + hr.padStart(2,'0') + ':' + min.padStart(2,'0'));
+      } else {
+        parts.push('At minute(s) ' + min + ' past hour(s) ' + hr);
+      }
+      if (dom !== '*') parts.push('on day-of-month ' + describeField(dom));
+      if (mon !== '*') parts.push('in ' + describeField(mon, MONTH_NAMES));
+      if (dow !== '*') parts.push('on ' + describeField(dow, DOW_NAMES));
+      return parts.join(', ') + '.';
+    }
+
+    function render() {
+      var min = minuteEl.value.trim() || '*';
+      var hr = hourEl.value.trim() || '*';
+      var dom = domEl.value.trim() || '*';
+      var mon = monthEl.value.trim() || '*';
+      var dow = dowEl.value.trim() || '*';
+
+      var valid = fieldValid(min,0,59) && fieldValid(hr,0,23) && fieldValid(dom,1,31) && fieldValid(mon,1,12) && fieldValid(dow,0,7);
+      var expr = [min, hr, dom, mon, dow].join(' ');
+      outputEl.value = expr;
+
+      if (!valid) {
+        summaryEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> One or more fields look invalid — check ranges (minute 0-59, hour 0-23, day 1-31, month 1-12, weekday 0-7).';
+        return;
+      }
+      summaryEl.innerHTML = '<i class="bi bi-info-circle"></i> ' + summarize(min, hr, dom, mon, dow);
+    }
+
+    var actions = {
+      copy: function () { outputEl.value ? SDEUtils.copy(outputEl.value) : SDEUtils.toast('Nothing to copy', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(root, 'click', '[data-preset]', function (e, node) {
+      var parts = node.dataset.preset.split(' ');
+      minuteEl.value = parts[0]; hourEl.value = parts[1]; domEl.value = parts[2];
+      monthEl.value = parts[3]; dowEl.value = parts[4];
+      render();
+    });
+
+    [minuteEl, hourEl, domEl, monthEl, dowEl].forEach(function (inp) {
+      SDEUtils.on(inp, 'input', SDEUtils.debounce(render, 150));
+    });
+
+    render();
+  };
+</script>

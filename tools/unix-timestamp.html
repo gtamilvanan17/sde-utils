@@ -1,0 +1,155 @@
+<!-- =========================================================================
+     SDE Utils — tools/unix-timestamp.html
+     Convert Unix time <-> human date, both directions, timezone-aware.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-clock"></i></div>
+  <div class="tool-header-text">
+    <h1>Unix Timestamp</h1>
+    <p>Convert Unix time to and from human-readable dates. Live "now" clock, seconds or milliseconds, timezone-aware display.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="field">
+    <label class="field-label">Current time</label>
+    <div class="stat-row" id="ut-now"></div>
+  </div>
+
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="ut-epoch">Epoch <span class="field-hint">(seconds or milliseconds — auto-detected)</span></label>
+      <input type="text" id="ut-epoch" class="input-sde-utils" placeholder="1700000000" spellcheck="false">
+    </div>
+    <div class="field">
+      <label class="field-label" for="ut-date">Human date</label>
+      <input type="datetime-local" id="ut-date" class="input-sde-utils" step="1">
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="now"><i class="bi bi-clock-history"></i> Use now</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="clear"><i class="bi bi-x-circle"></i> Clear</button>
+  </div>
+
+  <div id="ut-result"></div>
+</div>
+
+<style>
+  .ut-row { display:flex; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-2) 0; border-bottom:1px solid var(--border); font-size:var(--fs-sm); }
+  .ut-row:last-child { border-bottom:none; }
+  .ut-row .ut-k { color:var(--text-muted); }
+  .ut-row .ut-v { color:var(--text); font-weight:var(--fw-medium); font-family:var(--font-mono, monospace); text-align:right; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['unix-timestamp'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var nowEl = $('#ut-now', root);
+    var epochEl = $('#ut-epoch', root);
+    var dateEl = $('#ut-date', root);
+    var resultEl = $('#ut-result', root);
+    var nowTimer = null;
+
+    function renderNow() {
+      var d = new Date();
+      nowEl.innerHTML = '';
+      [
+        ['bi-hash', Math.floor(d.getTime()/1000) + ' (s)'],
+        ['bi-hash', d.getTime() + ' (ms)'],
+        ['bi-calendar', d.toISOString()]
+      ].forEach(function (s) {
+        nowEl.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + s[0] }),
+          document.createTextNode(' ' + s[1])
+        ]));
+      });
+    }
+
+    function toLocalInputValue(d) {
+      var pad = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' +
+        pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    function renderResult(d) {
+      if (!d || isNaN(d.getTime())) { resultEl.innerHTML = ''; return; }
+      var rows = [
+        ['Unix (seconds)', Math.floor(d.getTime()/1000)],
+        ['Unix (milliseconds)', d.getTime()],
+        ['ISO 8601 (UTC)', d.toISOString()],
+        ['Local string', d.toString()],
+        ['UTC string', d.toUTCString()],
+        ['Relative', relativeTime(d)]
+      ];
+      resultEl.innerHTML = '';
+      rows.forEach(function (r) {
+        resultEl.appendChild(el('div', { class: 'ut-row' }, [
+          el('span', { class: 'ut-k', text: r[0] }),
+          el('span', {
+            class: 'ut-v', text: String(r[1]), style: 'cursor:pointer',
+            title: 'Click to copy', onclick: function () { SDEUtils.copy(String(r[1])); }
+          })
+        ]));
+      });
+    }
+
+    function relativeTime(d) {
+      var diffMs = d.getTime() - Date.now();
+      var abs = Math.abs(diffMs);
+      var units = [['year', 31536000000], ['month', 2592000000], ['day', 86400000], ['hour', 3600000], ['minute', 60000], ['second', 1000]];
+      for (var i = 0; i < units.length; i++) {
+        if (abs >= units[i][1] || i === units.length - 1) {
+          var val = Math.round(diffMs / units[i][1]);
+          return (val >= 0 ? 'in ' : '') + Math.abs(val) + ' ' + units[i][0] + (Math.abs(val) === 1 ? '' : 's') + (val < 0 ? ' ago' : '');
+        }
+      }
+    }
+
+    function fromEpoch() {
+      var raw = epochEl.value.trim();
+      if (!raw) { SDEUtils.toast('Enter an epoch value', 'info'); return; }
+      if (!/^-?\d+(\.\d+)?$/.test(raw)) { SDEUtils.toast('Invalid epoch value', 'error'); return; }
+      var n = parseFloat(raw);
+      // Heuristic: values with magnitude < 10^12 are seconds, else milliseconds
+      var ms = Math.abs(n) < 1e12 ? n * 1000 : n;
+      var d = new Date(ms);
+      if (isNaN(d.getTime())) { SDEUtils.toast('Could not parse that timestamp', 'error'); return; }
+      dateEl.value = toLocalInputValue(d);
+      renderResult(d);
+    }
+
+    function fromDate() {
+      if (!dateEl.value) { SDEUtils.toast('Pick a date first', 'info'); return; }
+      var d = new Date(dateEl.value);
+      if (isNaN(d.getTime())) { SDEUtils.toast('Invalid date', 'error'); return; }
+      epochEl.value = Math.floor(d.getTime()/1000);
+      renderResult(d);
+    }
+
+    var actions = {
+      now: function () {
+        var d = new Date();
+        epochEl.value = Math.floor(d.getTime()/1000);
+        dateEl.value = toLocalInputValue(d);
+        renderResult(d);
+      },
+      clear: function () { epochEl.value = ''; dateEl.value = ''; resultEl.innerHTML = ''; }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(epochEl, 'change', fromEpoch);
+    SDEUtils.on(epochEl, 'keydown', function (e) { if (e.key === 'Enter') fromEpoch(); });
+    SDEUtils.on(dateEl, 'change', fromDate);
+
+    renderNow();
+    nowTimer = setInterval(renderNow, 1000);
+    actions.now();
+  };
+</script>

@@ -1,0 +1,148 @@
+<!-- =========================================================================
+     SDE Utils — tools/api-key.html
+     API Key generator — secure, prefixed, secret-looking keys via CSPRNG.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-key-fill"></i></div>
+  <div class="tool-header-text">
+    <h1>API Key</h1>
+    <p>Generate secure random API keys with a configurable prefix, length and character set. Nothing leaves your browser.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="apk-prefix" style="margin:0 var(--sp-2) 0 0">Prefix</label>
+    <input type="text" id="apk-prefix" class="input-sde-utils" style="width:120px" value="sk_live_">
+    <label class="field-label" for="apk-length" style="margin:0 var(--sp-2) 0 var(--sp-3)">Secret length</label>
+    <input type="number" id="apk-length" class="input-sde-utils" style="width:80px" min="8" max="128" value="32">
+    <label class="field-label" for="apk-count" style="margin:0 var(--sp-2) 0 var(--sp-3)">Quantity</label>
+    <input type="number" id="apk-count" class="input-sde-utils" style="width:80px" min="1" max="100" value="1">
+  </div>
+
+  <div class="toolbar">
+    <label class="check-inline"><input type="checkbox" id="apk-upper" checked> A–Z</label>
+    <label class="check-inline"><input type="checkbox" id="apk-lower" checked> a–z</label>
+    <label class="check-inline"><input type="checkbox" id="apk-digit" checked> 0–9</label>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="generate"><i class="bi bi-arrow-repeat"></i> Generate</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copyall"><i class="bi bi-clipboard-check"></i> Copy All</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download</button>
+  </div>
+
+  <div class="stat-row" id="apk-stats"></div>
+
+  <ul class="result-list" id="apk-results"></ul>
+</div>
+
+<div class="info-box">
+  <i class="bi bi-info-circle"></i>
+  These are randomly generated strings that look like API keys for use as placeholders, fixtures or examples — they are not tied to any real service.
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['api-key'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var prefixEl = $('#apk-prefix', root);
+    var lenEl = $('#apk-length', root);
+    var countEl = $('#apk-count', root);
+    var upper = $('#apk-upper', root), lower = $('#apk-lower', root), digit = $('#apk-digit', root);
+    var results = $('#apk-results', root);
+    var stats = $('#apk-stats', root);
+
+    var SETS = {
+      upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      lower: 'abcdefghijklmnopqrstuvwxyz',
+      digit: '0123456789'
+    };
+
+    var current = [];
+
+    function buildPool() {
+      var pool = '';
+      if (upper.checked) pool += SETS.upper;
+      if (lower.checked) pool += SETS.lower;
+      if (digit.checked) pool += SETS.digit;
+      return pool;
+    }
+
+    function randIndex(max) {
+      var limit = Math.floor(256 / max) * max;
+      var buf = new Uint8Array(1);
+      var b;
+      do { crypto.getRandomValues(buf); b = buf[0]; } while (b >= limit);
+      return b % max;
+    }
+
+    function makeSecret(pool, length) {
+      var out = '';
+      for (var i = 0; i < length; i++) out += pool.charAt(randIndex(pool.length));
+      return out;
+    }
+
+    function generate() {
+      var pool = buildPool();
+      if (!pool) { SDEUtils.toast('Select at least one character set', 'error'); return; }
+      var length = Math.max(8, Math.min(128, parseInt(lenEl.value, 10) || 32));
+      lenEl.value = length;
+      var n = Math.max(1, Math.min(100, parseInt(countEl.value, 10) || 1));
+      countEl.value = n;
+      var prefix = prefixEl.value || '';
+      current = [];
+      for (var i = 0; i < n; i++) current.push(prefix + makeSecret(pool, length));
+      renderResults();
+      renderStats(n, length + prefix.length);
+    }
+
+    function renderResults() {
+      results.innerHTML = '';
+      current.forEach(function (key) {
+        results.appendChild(el('li', {}, [
+          el('i', { class: 'bi bi-key', style: 'color:var(--accent)' }),
+          el('span', { text: key, style: 'font-family:var(--font-mono, monospace)' }),
+          el('button', {
+            class: 'copy-inline', type: 'button', title: 'Copy',
+            onclick: function () { SDEUtils.copy(key); }
+          }, [ el('i', { class: 'bi bi-clipboard' }) ])
+        ]));
+      });
+    }
+
+    function renderStats(n, totalLen) {
+      stats.innerHTML = '';
+      [['bi-hash', n + ' generated'], ['bi-rulers', totalLen + ' chars total']].forEach(function (s) {
+        stats.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + s[0] }),
+          document.createTextNode(' ' + s[1])
+        ]));
+      });
+    }
+
+    var actions = {
+      generate: generate,
+      copyall: function () { current.length ? SDEUtils.copy(current.join('\n')) : SDEUtils.toast('Generate a key first', 'info'); },
+      download: function () { current.length ? SDEUtils.download('sde-utils-api-keys.txt', current.join('\n')) : SDEUtils.toast('Nothing to download', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    [upper, lower, digit].forEach(function (chk) {
+      SDEUtils.on(chk, 'change', function () {
+        if (!buildPool()) chk.checked = true;
+        generate();
+      });
+    });
+    SDEUtils.on(prefixEl, 'input', SDEUtils.debounce(generate, 250));
+    SDEUtils.on(lenEl, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+    SDEUtils.on(countEl, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+
+    generate();
+  };
+</script>

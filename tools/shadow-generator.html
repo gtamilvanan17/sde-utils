@@ -1,0 +1,133 @@
+<!-- =========================================================================
+     SDE Utils — tools/shadow-generator.html
+     Box-shadow & text-shadow builder with live preview + copy CSS.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-square"></i></div>
+  <div class="tool-header-text">
+    <h1>Shadow Generator</h1>
+    <p>Design box-shadow and text-shadow effects with live preview. Copy the generated CSS in one click.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="seg" role="tablist" aria-label="Shadow type">
+    <button class="seg-btn is-active" data-type="box" role="tab"><i class="bi bi-square"></i> Box Shadow</button>
+    <button class="seg-btn" data-type="text" role="tab"><i class="bi bi-fonts"></i> Text Shadow</button>
+  </div>
+
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="sg-x">Offset X: <strong id="sg-xval">4</strong>px</label>
+      <input type="range" id="sg-x" min="-50" max="50" value="4" style="width:100%; accent-color:var(--accent);">
+    </div>
+    <div class="field">
+      <label class="field-label" for="sg-y">Offset Y: <strong id="sg-yval">4</strong>px</label>
+      <input type="range" id="sg-y" min="-50" max="50" value="4" style="width:100%; accent-color:var(--accent);">
+    </div>
+  </div>
+
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="sg-blur">Blur: <strong id="sg-blurval">10</strong>px</label>
+      <input type="range" id="sg-blur" min="0" max="100" value="10" style="width:100%; accent-color:var(--accent);">
+    </div>
+    <div class="field" id="sg-spread-field">
+      <label class="field-label" for="sg-spread">Spread: <strong id="sg-spreadval">0</strong>px</label>
+      <input type="range" id="sg-spread" min="-50" max="50" value="0" style="width:100%; accent-color:var(--accent);">
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="field-label" for="sg-color" style="margin:0 var(--sp-2) 0 0">Color</label>
+    <input type="color" id="sg-color" value="#000000" style="width:44px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer;">
+    <label class="field-label" for="sg-opacity" style="margin:0 var(--sp-2) 0 var(--sp-3)">Opacity: <strong id="sg-opacityval">35</strong>%</label>
+    <input type="range" id="sg-opacity" min="0" max="100" value="35" style="width:140px; accent-color:var(--accent);">
+    <label class="check-inline"><input type="checkbox" id="sg-inset"> Inset</label>
+  </div>
+
+  <div id="sg-preview-wrap" class="sg-preview-wrap">
+    <div id="sg-preview" class="sg-preview">Preview</div>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="sg-output">CSS</label>
+    <textarea id="sg-output" class="textarea-sde-utils" style="min-height:60px" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy CSS</button>
+  </div>
+</div>
+
+<style>
+  .sg-preview-wrap { display:flex; align-items:center; justify-content:center; padding:var(--sp-8) 0; background:var(--surface-2); border-radius:var(--radius-md); border:1px solid var(--border); margin:var(--sp-4) 0; }
+  .sg-preview { width:140px; height:100px; background:var(--surface); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; color:var(--text); font-weight:var(--fw-medium); }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['shadow-generator'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, $$ = SDEUtils.$$;
+
+    var xEl = $('#sg-x', root), yEl = $('#sg-y', root), blurEl = $('#sg-blur', root), spreadEl = $('#sg-spread', root);
+    var colorEl = $('#sg-color', root), opacityEl = $('#sg-opacity', root), insetEl = $('#sg-inset', root);
+    var preview = $('#sg-preview', root), output = $('#sg-output', root);
+    var spreadField = $('#sg-spread-field', root);
+    var type = 'box';
+
+    function hexToRgba(hex, alphaPct) {
+      var h = hex.replace('#','');
+      var r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + (alphaPct/100).toFixed(2) + ')';
+    }
+
+    function render() {
+      $('#sg-xval', root).textContent = xEl.value;
+      $('#sg-yval', root).textContent = yEl.value;
+      $('#sg-blurval', root).textContent = blurEl.value;
+      $('#sg-spreadval', root).textContent = spreadEl.value;
+      $('#sg-opacityval', root).textContent = opacityEl.value;
+
+      var color = hexToRgba(colorEl.value, opacityEl.value);
+      var x = xEl.value + 'px', y = yEl.value + 'px', blur = blurEl.value + 'px';
+
+      if (type === 'box') {
+        spreadField.style.display = '';
+        var spread = spreadEl.value + 'px';
+        var value = (insetEl.checked ? 'inset ' : '') + x + ' ' + y + ' ' + blur + ' ' + spread + ' ' + color;
+        preview.style.textShadow = '';
+        preview.style.boxShadow = value;
+        output.value = 'box-shadow: ' + value + ';';
+      } else {
+        spreadField.style.display = 'none';
+        var tvalue = x + ' ' + y + ' ' + blur + ' ' + color;
+        preview.style.boxShadow = '';
+        preview.style.textShadow = tvalue;
+        output.value = 'text-shadow: ' + tvalue + ';';
+      }
+    }
+
+    var actions = {
+      copy: function () { output.value ? SDEUtils.copy(output.value) : SDEUtils.toast('Nothing to copy', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(root, 'click', '.seg-btn', function (e, node) {
+      type = node.dataset.type;
+      $$('.seg-btn', root).forEach(function (b) { b.classList.toggle('is-active', b === node); });
+      insetEl.parentElement.style.display = type === 'box' ? '' : 'none';
+      render();
+    });
+
+    [xEl, yEl, blurEl, spreadEl, opacityEl].forEach(function (r) { SDEUtils.on(r, 'input', render); });
+    SDEUtils.on(colorEl, 'input', render);
+    SDEUtils.on(insetEl, 'change', render);
+
+    render();
+  };
+</script>

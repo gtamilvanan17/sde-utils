@@ -1,0 +1,157 @@
+<!-- =========================================================================
+     SDE Utils — tools/markdown-to-html.html
+     Convert Markdown to clean HTML source. Self-contained parser.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-filetype-html"></i></div>
+  <div class="tool-header-text">
+    <h1>Markdown to HTML</h1>
+    <p>Convert Markdown into clean HTML source — headers, emphasis, links, lists, code blocks and blockquotes. Copy or download the result.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="mh-input">Markdown</label>
+      <textarea id="mh-input" class="textarea-sde-utils" style="min-height:320px" spellcheck="false" placeholder="# Hello&#10;&#10;Some **markdown**..."></textarea>
+    </div>
+    <div class="field">
+      <label class="field-label" for="mh-output">HTML output</label>
+      <textarea id="mh-output" class="textarea-sde-utils" style="min-height:320px" readonly spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="convert"><i class="bi bi-arrow-right"></i> Convert</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download .html</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="sample"><i class="bi bi-lightbulb"></i> Sample</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="clear"><i class="bi bi-x-circle"></i> Clear</button>
+  </div>
+
+  <div class="stat-row" id="mh-stats"></div>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+
+  /* Shared minimal markdown -> HTML parser (also used by markdown-preview.html) */
+  window.SDEUtilsMarkdown = window.SDEUtilsMarkdown || function (src, escapeHtml) {
+    var lines = src.replace(/\r\n?/g, '\n').split('\n');
+    var html = [];
+    var i = 0;
+    var inCode = false, codeLang = '', codeLines = [];
+    var listStack = [];
+
+    function closeLists() {
+      while (listStack.length) {
+        var l = listStack.pop();
+        html.push('<' + (l.type === 'ol' ? '/ol' : '/ul') + '>');
+      }
+    }
+
+    function inlineFmt(text) {
+      text = escapeHtml(text);
+      text = text.replace(/`([^`]+)`/g, function (m, code) { return '<code>' + code + '</code>'; });
+      text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">');
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      text = text.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, function (m, a, b) { return '<strong>' + (a || b) + '</strong>'; });
+      text = text.replace(/\*([^*]+)\*|_([^_]+)_/g, function (m, a, b) { return '<em>' + (a || b) + '</em>'; });
+      return text;
+    }
+
+    for (i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      var fence = /^```(\S*)\s*$/.exec(line);
+      if (fence) {
+        if (!inCode) { inCode = true; codeLang = fence[1]; codeLines = []; }
+        else {
+          html.push('<pre><code' + (codeLang ? ' class="language-' + codeLang + '"' : '') + '>' +
+            escapeHtml(codeLines.join('\n')) + '</code></pre>');
+          inCode = false;
+        }
+        continue;
+      }
+      if (inCode) { codeLines.push(line); continue; }
+
+      if (!line.trim()) { closeLists(); continue; }
+
+      var h = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (h) {
+        closeLists();
+        var level = h[1].length;
+        html.push('<h' + level + '>' + inlineFmt(h[2]) + '</h' + level + '>');
+        continue;
+      }
+
+      var bq = /^>\s?(.*)$/.exec(line);
+      if (bq) {
+        closeLists();
+        html.push('<blockquote>' + inlineFmt(bq[1]) + '</blockquote>');
+        continue;
+      }
+
+      var ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+      var ul = /^\s*[-*+]\s+(.*)$/.exec(line);
+      if (ol || ul) {
+        var type = ol ? 'ol' : 'ul';
+        var content = (ol || ul)[1];
+        if (!listStack.length || listStack[listStack.length - 1].type !== type) {
+          closeLists();
+          html.push('<' + type + '>');
+          listStack.push({ type: type });
+        }
+        html.push('<li>' + inlineFmt(content) + '</li>');
+        continue;
+      }
+
+      closeLists();
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) { html.push('<hr>'); continue; }
+      html.push('<p>' + inlineFmt(line) + '</p>');
+    }
+    closeLists();
+    if (inCode) {
+      html.push('<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+    }
+    return html.join('\n');
+  };
+
+  window.SDEUtilsTools['markdown-to-html'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+    var input = $('#mh-input', root), output = $('#mh-output', root), stats = $('#mh-stats', root);
+
+    var SAMPLE = '# Title\n\nSome **bold** and *italic* text with `inline code`.\n\n' +
+      '- item one\n- item two\n\n> A quote\n\n```js\nconsole.log("hi");\n```\n';
+
+    function convert() {
+      var src = input.value;
+      if (!src.trim()) { SDEUtils.toast('Enter some Markdown first', 'info'); output.value = ''; return; }
+      var html = window.SDEUtilsMarkdown(src, SDEUtils.escapeHtml);
+      output.value = html;
+      stats.innerHTML = '';
+      stats.appendChild(el('span', { class: 'stat-chip' }, [
+        el('i', { class: 'bi bi-code-slash' }),
+        document.createTextNode(' ' + html.length + ' chars of HTML')
+      ]));
+    }
+
+    var actions = {
+      convert: convert,
+      copy: function () { output.value ? SDEUtils.copy(output.value) : SDEUtils.toast('Nothing to copy — convert first', 'info'); },
+      download: function () { output.value ? SDEUtils.download('converted.html', output.value, 'text/html') : SDEUtils.toast('Nothing to download', 'info'); },
+      sample: function () { input.value = SAMPLE; convert(); },
+      clear: function () { input.value = ''; output.value = ''; stats.innerHTML = ''; }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(input, 'input', SDEUtils.debounce(convert, 200));
+    input.value = SAMPLE;
+    convert();
+  };
+</script>

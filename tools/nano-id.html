@@ -1,0 +1,145 @@
+<!-- =========================================================================
+     SDE Utils — tools/nano-id.html
+     Nano ID generator — compact, URL-safe unique IDs using CSPRNG.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-dot"></i></div>
+  <div class="tool-header-text">
+    <h1>Nano ID</h1>
+    <p>Generate compact, URL-safe Nano IDs using your browser's cryptographic RNG. Configurable alphabet and length.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="nid-length" style="margin:0 var(--sp-2) 0 0">Length</label>
+    <input type="number" id="nid-length" class="input-sde-utils" style="width:80px" min="2" max="128" value="21">
+    <label class="field-label" for="nid-count" style="margin:0 var(--sp-2) 0 var(--sp-3)">Quantity</label>
+    <input type="number" id="nid-count" class="input-sde-utils" style="width:80px" min="1" max="500" value="5">
+  </div>
+
+  <div class="toolbar">
+    <label class="check-inline"><input type="radio" name="nid-alpha" id="nid-alpha-default" checked> Default (A-Za-z0-9_-)</label>
+    <label class="check-inline"><input type="radio" name="nid-alpha" id="nid-alpha-alnum"> Alphanumeric only</label>
+    <label class="check-inline"><input type="radio" name="nid-alpha" id="nid-alpha-lower"> Lowercase + digits</label>
+    <label class="check-inline"><input type="radio" name="nid-alpha" id="nid-alpha-hex"> Hex</label>
+    <label class="check-inline"><input type="radio" name="nid-alpha" id="nid-alpha-custom"> Custom</label>
+    <input type="text" id="nid-custom" class="input-sde-utils" style="width:160px" placeholder="custom alphabet" disabled>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="generate"><i class="bi bi-arrow-repeat"></i> Generate</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copyall"><i class="bi bi-clipboard-check"></i> Copy All</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download</button>
+  </div>
+
+  <div class="stat-row" id="nid-stats"></div>
+
+  <ul class="result-list" id="nid-results"></ul>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['nano-id'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, $$ = SDEUtils.$$, el = SDEUtils.el;
+
+    var lenEl = $('#nid-length', root);
+    var countEl = $('#nid-count', root);
+    var customEl = $('#nid-custom', root);
+    var results = $('#nid-results', root);
+    var stats = $('#nid-stats', root);
+
+    var ALPHABETS = {
+      'nid-alpha-default': 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-',
+      'nid-alpha-alnum': 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+      'nid-alpha-lower': 'abcdefghijklmnopqrstuvwxyz0123456789',
+      'nid-alpha-hex': '0123456789abcdef'
+    };
+
+    var current = [];
+
+    function alphabet() {
+      var checked = $$('input[name="nid-alpha"]', root).find(function (r) { return r.checked; });
+      if (!checked) return ALPHABETS['nid-alpha-default'];
+      if (checked.id === 'nid-alpha-custom') {
+        var chars = Array.from(new Set(customEl.value.split(''))).join('');
+        return chars;
+      }
+      return ALPHABETS[checked.id];
+    }
+
+    function randIndex(max) {
+      var limit = Math.floor(256 / max) * max;
+      var buf = new Uint8Array(1);
+      var b;
+      do { crypto.getRandomValues(buf); b = buf[0]; } while (b >= limit);
+      return b % max;
+    }
+
+    function makeOne(pool, length) {
+      var out = '';
+      for (var i = 0; i < length; i++) out += pool.charAt(randIndex(pool.length));
+      return out;
+    }
+
+    function generate() {
+      var pool = alphabet();
+      if (!pool) { SDEUtils.toast('Provide a custom alphabet', 'error'); return; }
+      var length = Math.max(2, Math.min(128, parseInt(lenEl.value, 10) || 21));
+      lenEl.value = length;
+      var n = Math.max(1, Math.min(500, parseInt(countEl.value, 10) || 1));
+      countEl.value = n;
+      current = [];
+      for (var i = 0; i < n; i++) current.push(makeOne(pool, length));
+      renderResults();
+      renderStats(n, pool.length);
+    }
+
+    function renderResults() {
+      results.innerHTML = '';
+      current.forEach(function (id) {
+        results.appendChild(el('li', {}, [
+          el('i', { class: 'bi bi-dot', style: 'color:var(--accent)' }),
+          el('span', { text: id }),
+          el('button', {
+            class: 'copy-inline', type: 'button', title: 'Copy',
+            onclick: function () { SDEUtils.copy(id); }
+          }, [ el('i', { class: 'bi bi-clipboard' }) ])
+        ]));
+      });
+    }
+
+    function renderStats(n, poolSize) {
+      stats.innerHTML = '';
+      [['bi-hash', n + ' generated'], ['bi-braces', poolSize + ' char alphabet']].forEach(function (s) {
+        stats.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + s[0] }),
+          document.createTextNode(' ' + s[1])
+        ]));
+      });
+    }
+
+    var actions = {
+      generate: generate,
+      copyall: function () { current.length ? SDEUtils.copy(current.join('\n')) : SDEUtils.toast('Generate some IDs first', 'info'); },
+      download: function () { current.length ? SDEUtils.download('sde-utils-nanoids.txt', current.join('\n')) : SDEUtils.toast('Nothing to download', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    $$('input[name="nid-alpha"]', root).forEach(function (r) {
+      SDEUtils.on(r, 'change', function () {
+        customEl.disabled = r.id !== 'nid-alpha-custom';
+        generate();
+      });
+    });
+    SDEUtils.on(customEl, 'input', SDEUtils.debounce(function () { if ($('#nid-alpha-custom', root).checked) generate(); }, 300));
+    SDEUtils.on(countEl, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+    SDEUtils.on(lenEl, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+
+    generate();
+  };
+</script>

@@ -1,0 +1,133 @@
+<!-- =========================================================================
+     SDE Utils — tools/fake-user.html
+     Generate realistic fake user profiles (self-contained data, no network).
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-person-badge"></i></div>
+  <div class="tool-header-text">
+    <h1>Fake User</h1>
+    <p>Generate realistic fake user profiles for tests and fixtures — name, email, username, address. Entirely offline.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="fu-count" style="margin:0 var(--sp-2) 0 0">Count</label>
+    <input type="number" id="fu-count" class="input-sde-utils" style="width:80px" min="1" max="100" value="5">
+    <label class="check-inline"><input type="checkbox" id="fu-json"> Output as JSON</label>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="generate"><i class="bi bi-arrow-repeat"></i> Generate</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download</button>
+  </div>
+
+  <div class="stat-row" id="fu-stats"></div>
+
+  <div id="fu-cards"></div>
+</div>
+
+<style>
+  .fu-card { border:1px solid var(--border); border-radius:var(--radius-md); padding:var(--sp-3); margin-bottom:var(--sp-2); background:var(--surface-2); }
+  .fu-card-name { font-weight:var(--fw-semibold); color:var(--text); margin-bottom:var(--sp-1); }
+  .fu-card-row { font-size:var(--fs-sm); color:var(--text-muted); display:flex; gap:var(--sp-2); align-items:center; }
+  .fu-card-row .bi { width:16px; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['fake-user'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var countEl = $('#fu-count', root);
+    var jsonChk = $('#fu-json', root);
+    var stats = $('#fu-stats', root);
+    var cardsEl = $('#fu-cards', root);
+
+    var FIRST = ['Aiden','Sofia','Liam','Emma','Noah','Olivia','Ravi','Priya','Mateo','Isabella','Ethan','Ava','Kai','Mia','Leo','Zara','Arjun','Nina','Omar','Chloe'];
+    var LAST = ['Sharma','Patel','Johnson','Smith','Garcia','Kim','Nguyen','Brown','Davis','Rodriguez','Martinez','Lee','Walker','Hall','Allen','Young','King','Wright','Lopez','Hill'];
+    var DOMAINS = ['example.com','mail.test','sample.org','fakemail.dev','demo.io'];
+    var STREETS = ['Maple St','Oak Ave','Cedar Ln','Elm Dr','Sunset Blvd','2nd St','Park Rd','Highland Ave','River Way','Church St'];
+    var CITIES = ['Springfield','Riverside','Fairview','Georgetown','Salem','Franklin','Clinton','Madison','Arlington','Greenville'];
+    var STATES = ['CA','NY','TX','WA','CO','IL','MA','GA','OR','NC'];
+
+    var current = [];
+
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    function padZip() { return String(10000 + Math.floor(Math.random() * 89999)); }
+
+    function makeUser(i) {
+      var first = pick(FIRST), last = pick(LAST);
+      var username = (first.charAt(0) + last).toLowerCase() + Math.floor(Math.random() * 900 + 100);
+      var email = username + '@' + pick(DOMAINS);
+      var street = Math.floor(Math.random() * 9000 + 100) + ' ' + pick(STREETS);
+      var phone = '(' + Math.floor(Math.random() * 900 + 100) + ') ' + Math.floor(Math.random() * 900 + 100) + '-' + Math.floor(Math.random() * 9000 + 1000);
+      return {
+        id: i + 1,
+        name: first + ' ' + last,
+        username: username,
+        email: email,
+        phone: phone,
+        address: street + ', ' + pick(CITIES) + ', ' + pick(STATES) + ' ' + padZip()
+      };
+    }
+
+    function generate() {
+      var n = Math.max(1, Math.min(100, parseInt(countEl.value, 10) || 1));
+      countEl.value = n;
+      current = [];
+      for (var i = 0; i < n; i++) current.push(makeUser(i));
+      render();
+    }
+
+    function render() {
+      cardsEl.innerHTML = '';
+      stats.innerHTML = '';
+      stats.appendChild(el('span', { class: 'stat-chip' }, [
+        el('i', { class: 'bi bi-people' }),
+        document.createTextNode(' ' + current.length + ' users')
+      ]));
+      current.forEach(function (u) {
+        cardsEl.appendChild(el('div', { class: 'fu-card' }, [
+          el('div', { class: 'fu-card-name' }, [
+            document.createTextNode(u.name + ' '),
+            el('button', {
+              class: 'copy-inline', type: 'button', title: 'Copy JSON',
+              onclick: function () { SDEUtils.copy(JSON.stringify(u, null, 2)); }
+            }, [ el('i', { class: 'bi bi-clipboard' }) ])
+          ]),
+          el('div', { class: 'fu-card-row' }, [ el('i', { class: 'bi bi-at' }), document.createTextNode(u.username) ]),
+          el('div', { class: 'fu-card-row' }, [ el('i', { class: 'bi bi-envelope' }), document.createTextNode(u.email) ]),
+          el('div', { class: 'fu-card-row' }, [ el('i', { class: 'bi bi-telephone' }), document.createTextNode(u.phone) ]),
+          el('div', { class: 'fu-card-row' }, [ el('i', { class: 'bi bi-geo-alt' }), document.createTextNode(u.address) ])
+        ]));
+      });
+    }
+
+    function serialize() {
+      if (jsonChk.checked) return JSON.stringify(current, null, 2);
+      return current.map(function (u) {
+        return u.name + ' | ' + u.username + ' | ' + u.email + ' | ' + u.phone + ' | ' + u.address;
+      }).join('\n');
+    }
+
+    var actions = {
+      generate: generate,
+      copy: function () { current.length ? SDEUtils.copy(serialize()) : SDEUtils.toast('Generate some users first', 'info'); },
+      download: function () {
+        if (!current.length) { SDEUtils.toast('Nothing to download', 'info'); return; }
+        var ext = jsonChk.checked ? 'json' : 'txt';
+        SDEUtils.download('fake-users.' + ext, serialize());
+      }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+    SDEUtils.on(countEl, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+
+    generate();
+  };
+</script>

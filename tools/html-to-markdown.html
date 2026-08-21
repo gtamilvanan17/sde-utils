@@ -1,0 +1,144 @@
+<!-- =========================================================================
+     SDE Utils — tools/html-to-markdown.html
+     Best-effort DOM-based HTML -> Markdown conversion of common tags.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-markdown-fill"></i></div>
+  <div class="tool-header-text">
+    <h1>HTML to Markdown</h1>
+    <p>Convert HTML back into Markdown — headings, bold/italic, links, lists, code, blockquotes. Parsed locally, no network calls.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="hm-input">HTML</label>
+      <textarea id="hm-input" class="textarea-sde-utils" style="min-height:320px" spellcheck="false" placeholder="<h1>Hello</h1>&#10;<p>Some <strong>bold</strong> text.</p>"></textarea>
+    </div>
+    <div class="field">
+      <label class="field-label" for="hm-output">Markdown output</label>
+      <textarea id="hm-output" class="textarea-sde-utils" style="min-height:320px" readonly spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="convert"><i class="bi bi-arrow-right"></i> Convert</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download .md</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="sample"><i class="bi bi-lightbulb"></i> Sample</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="clear"><i class="bi bi-x-circle"></i> Clear</button>
+  </div>
+
+  <div class="info-box">
+    <i class="bi bi-info-circle"></i>
+    Supports h1–h6, p, strong/b, em/i, a, ul/ol/li, code/pre, blockquote, br, hr. Unrecognized tags are unwrapped to their text content.
+  </div>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['html-to-markdown'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$;
+    var input = $('#hm-input', root), output = $('#hm-output', root);
+
+    var SAMPLE = '<h1>Title</h1>\n<p>Some <strong>bold</strong> and <em>italic</em> text with a <a href="https://example.com">link</a>.</p>\n' +
+      '<ul>\n<li>Item one</li>\n<li>Item two</li>\n</ul>\n<blockquote>A quote</blockquote>\n<pre><code>console.log("hi");</code></pre>';
+
+    function collapseWs(s) { return s.replace(/[ \t\n\r]+/g, ' '); }
+
+    function nodeToMd(node, ctx) {
+      ctx = ctx || {};
+      if (node.nodeType === Node.TEXT_NODE) {
+        return ctx.pre ? node.textContent : collapseWs(node.textContent);
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+      var tag = node.tagName.toLowerCase();
+      var childCtx = Object.assign({}, ctx);
+      var children = function (c) {
+        return Array.prototype.map.call(node.childNodes, function (n) { return nodeToMd(n, c); }).join('');
+      };
+
+      switch (tag) {
+        case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6': {
+          var level = parseInt(tag.slice(1), 10);
+          return '\n' + '#'.repeat(level) + ' ' + children(childCtx).trim() + '\n\n';
+        }
+        case 'p': return '\n' + children(childCtx).trim() + '\n\n';
+        case 'br': return '  \n';
+        case 'hr': return '\n---\n\n';
+        case 'strong': case 'b': return '**' + children(childCtx).trim() + '**';
+        case 'em': case 'i': return '*' + children(childCtx).trim() + '*';
+        case 'a': {
+          var href = node.getAttribute('href') || '';
+          return '[' + children(childCtx).trim() + '](' + href + ')';
+        }
+        case 'img': {
+          return '![' + (node.getAttribute('alt') || '') + '](' + (node.getAttribute('src') || '') + ')';
+        }
+        case 'code': {
+          if (node.parentElement && node.parentElement.tagName.toLowerCase() === 'pre') {
+            return children(Object.assign({}, childCtx, { pre: true }));
+          }
+          return '`' + children(childCtx) + '`';
+        }
+        case 'pre': {
+          var code = children(Object.assign({}, childCtx, { pre: true }));
+          return '\n```\n' + code.replace(/^\n+|\n+$/g, '') + '\n```\n\n';
+        }
+        case 'blockquote': {
+          var inner = children(childCtx).trim();
+          return '\n' + inner.split('\n').map(function (l) { return '> ' + l; }).join('\n') + '\n\n';
+        }
+        case 'ul': case 'ol': {
+          var idx = 0;
+          var items = Array.prototype.filter.call(node.childNodes, function (n) {
+            return n.nodeType === Node.ELEMENT_NODE && n.tagName.toLowerCase() === 'li';
+          }).map(function (li) {
+            idx++;
+            var prefix = tag === 'ol' ? (idx + '. ') : '- ';
+            return prefix + Array.prototype.map.call(li.childNodes, function (n) { return nodeToMd(n, childCtx); }).join('').trim();
+          });
+          return '\n' + items.join('\n') + '\n\n';
+        }
+        case 'li': return children(childCtx);
+        case 'script': case 'style': return '';
+        default: return children(childCtx);
+      }
+    }
+
+    function htmlToMarkdown(htmlStr) {
+      var doc = new DOMParser().parseFromString(htmlStr, 'text/html');
+      var md = Array.prototype.map.call(doc.body.childNodes, function (n) { return nodeToMd(n, {}); }).join('');
+      return md.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    }
+
+    function convert() {
+      var src = input.value;
+      if (!src.trim()) { SDEUtils.toast('Paste some HTML first', 'info'); output.value = ''; return; }
+      try {
+        output.value = htmlToMarkdown(src);
+      } catch (e) {
+        SDEUtils.toast('Could not parse HTML: ' + e.message, 'error');
+      }
+    }
+
+    var actions = {
+      convert: convert,
+      copy: function () { output.value ? SDEUtils.copy(output.value) : SDEUtils.toast('Nothing to copy — convert first', 'info'); },
+      download: function () { output.value ? SDEUtils.download('converted.md', output.value) : SDEUtils.toast('Nothing to download', 'info'); },
+      sample: function () { input.value = SAMPLE; convert(); },
+      clear: function () { input.value = ''; output.value = ''; }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(input, 'input', SDEUtils.debounce(convert, 200));
+    input.value = SAMPLE;
+    convert();
+  };
+</script>

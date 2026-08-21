@@ -1,0 +1,184 @@
+<!-- =========================================================================
+     SDE Utils — tools/cron-parser.html
+     Parse a cron expression, explain it in plain English, compute next runs.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-calendar-check"></i></div>
+  <div class="tool-header-text">
+    <h1>Cron Parser</h1>
+    <p>Paste a 5-field cron expression to get a plain-English description and the next few (approximate) run times.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="field">
+    <label class="field-label" for="cp-input">Cron expression</label>
+    <input type="text" id="cp-input" class="input-sde-utils" placeholder="0 9 * * 1-5" value="0 9 * * 1-5" spellcheck="false" style="font-family:var(--font-mono, monospace);">
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="parse"><i class="bi bi-search"></i> Parse</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="clear"><i class="bi bi-x-circle"></i> Clear</button>
+  </div>
+
+  <div id="cp-summary" class="info-box" hidden></div>
+
+  <div class="field" id="cp-next-field" hidden>
+    <label class="field-label">Next 5 run times (local time)</label>
+    <ul class="result-list" id="cp-next"></ul>
+  </div>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['cron-parser'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var input = $('#cp-input', root);
+    var summaryEl = $('#cp-summary', root);
+    var nextField = $('#cp-next-field', root);
+    var nextList = $('#cp-next', root);
+
+    var DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    function expandField(field, min, max) {
+      var values = new Set();
+      field.split(',').forEach(function (part) {
+        var m = /^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/.exec(part.trim());
+        if (!m) throw new Error('Invalid field segment "' + part + '"');
+        var base = m[1], step = m[2] ? parseInt(m[2], 10) : 1;
+        var lo, hi;
+        if (base === '*') { lo = min; hi = max; }
+        else if (base.indexOf('-') !== -1) {
+          var r = base.split('-').map(Number);
+          lo = r[0]; hi = r[1];
+          if (lo > hi || lo < min || hi > max) throw new Error('Range out of bounds in "' + part + '"');
+        } else {
+          lo = hi = parseInt(base, 10);
+          if (lo < min || lo > max) throw new Error('Value out of bounds in "' + part + '"');
+        }
+        for (var v = lo; v <= hi; v += step) values.add(v);
+      });
+      return values;
+    }
+
+    function parseCron(expr) {
+      var fields = expr.trim().split(/\s+/);
+      if (fields.length !== 5) throw new Error('Expected 5 fields (minute hour day-of-month month day-of-week), got ' + fields.length);
+      var minute = expandField(fields[0], 0, 59);
+      var hour = expandField(fields[1], 0, 23);
+      var dom = expandField(fields[2], 1, 31);
+      var month = expandField(fields[3], 1, 12);
+      var dowRaw = expandField(fields[4].replace('7', '0'), 0, 6);
+      return {
+        raw: fields, minute: minute, hour: hour, dom: dom, month: month, dow: dowRaw,
+        domRestricted: fields[2] !== '*', dowRestricted: fields[4] !== '*'
+      };
+    }
+
+    function describeSet(set, min, max, names) {
+      var size = max - min + 1;
+      if (set.size === size) return null;
+      var arr = Array.from(set).sort(function (a,b) { return a-b; });
+      return arr.map(function (v) { return names ? names[v] : v; }).join(', ');
+    }
+
+    function summarize(cron, fields) {
+      var minDesc = describeSet(cron.minute, 0, 59);
+      var hourDesc = describeSet(cron.hour, 0, 23);
+      var domDesc = describeSet(cron.dom, 1, 31);
+      var monthDesc = describeSet(cron.month, 1, 12, MONTH_NAMES);
+      var dowDesc = describeSet(cron.dow, 0, 6, DOW_NAMES);
+
+      var timePart;
+      if (!minDesc && !hourDesc) timePart = 'Every minute';
+      else if (minDesc && !minDesc.includes(',') && hourDesc && !hourDesc.includes(',')) {
+        timePart = 'At ' + String(hourDesc).padStart(2,'0') + ':' + String(minDesc).padStart(2,'0');
+      } else {
+        timePart = 'At minute(s) ' + (minDesc || 'every minute') + ' past hour(s) ' + (hourDesc || 'every hour');
+      }
+
+      var parts = [timePart];
+      if (domDesc && !dowDesc) parts.push('on day-of-month ' + domDesc);
+      if (dowDesc && !domDesc) parts.push('on ' + dowDesc);
+      if (domDesc && dowDesc) parts.push('on day-of-month ' + domDesc + ' OR on ' + dowDesc + ' (cron OR-rule when both fields are restricted)');
+      if (monthDesc) parts.push('in ' + monthDesc);
+      return parts.join(', ') + '.';
+    }
+
+    function matchesDay(cron, date) {
+      var domMatch = cron.dom.has(date.getDate());
+      var dowMatch = cron.dow.has(date.getDay());
+      if (cron.domRestricted && cron.dowRestricted) return domMatch || dowMatch;
+      if (cron.domRestricted) return domMatch;
+      if (cron.dowRestricted) return dowMatch;
+      return true;
+    }
+
+    function nextRuns(cron, count) {
+      var results = [];
+      var d = new Date();
+      d.setSeconds(0, 0);
+      d.setMinutes(d.getMinutes() + 1);
+      var guardLimit = 60 * 24 * 366 * 2; // ~2 years of minutes
+      var guard = 0;
+      while (results.length < count && guard < guardLimit) {
+        guard++;
+        if (cron.month.has(d.getMonth() + 1) && matchesDay(cron, d) && cron.hour.has(d.getHours()) && cron.minute.has(d.getMinutes())) {
+          results.push(new Date(d));
+        }
+        d.setMinutes(d.getMinutes() + 1);
+      }
+      return results;
+    }
+
+    function parse() {
+      var expr = input.value.trim();
+      if (!expr) { SDEUtils.toast('Enter a cron expression first', 'info'); return; }
+      var cron;
+      try {
+        cron = parseCron(expr);
+      } catch (e) {
+        SDEUtils.toast('Invalid cron expression: ' + e.message, 'error');
+        summaryEl.hidden = true;
+        nextField.hidden = true;
+        return;
+      }
+      summaryEl.hidden = false;
+      summaryEl.innerHTML = '<i class="bi bi-info-circle"></i> ' + summarize(cron);
+
+      var runs = nextRuns(cron, 5);
+      nextField.hidden = false;
+      nextList.innerHTML = '';
+      if (!runs.length) {
+        nextList.appendChild(el('li', { text: 'No matching run found within the next 2 years — check the expression.' }));
+      }
+      runs.forEach(function (d) {
+        var text = d.toLocaleString();
+        nextList.appendChild(el('li', {}, [
+          el('i', { class: 'bi bi-calendar-event', style: 'color:var(--accent)' }),
+          el('span', { text: text }),
+          el('button', {
+            class: 'copy-inline', type: 'button', title: 'Copy',
+            onclick: function () { SDEUtils.copy(text); }
+          }, [ el('i', { class: 'bi bi-clipboard' }) ])
+        ]));
+      });
+    }
+
+    var actions = {
+      parse: parse,
+      clear: function () { input.value = ''; summaryEl.hidden = true; nextField.hidden = true; }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+    SDEUtils.on(input, 'keydown', function (e) { if (e.key === 'Enter') parse(); });
+    SDEUtils.on(input, 'input', SDEUtils.debounce(parse, 300));
+
+    parse();
+  };
+</script>

@@ -1,0 +1,139 @@
+<!-- =========================================================================
+     SDE Utils — tools/random-number.html
+     Random Number generator — min/max/count/decimals/no-duplicates, CSPRNG.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-dice-5"></i></div>
+  <div class="tool-header-text">
+    <h1>Random Number</h1>
+    <p>Generate random numbers in a range using your browser's cryptographic RNG, with optional decimals and no-duplicate mode.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="rn-min" style="margin:0 var(--sp-2) 0 0">Min</label>
+    <input type="number" id="rn-min" class="input-sde-utils" style="width:100px" value="1">
+    <label class="field-label" for="rn-max" style="margin:0 var(--sp-2) 0 var(--sp-3)">Max</label>
+    <input type="number" id="rn-max" class="input-sde-utils" style="width:100px" value="100">
+    <label class="field-label" for="rn-decimals" style="margin:0 var(--sp-2) 0 var(--sp-3)">Decimals</label>
+    <input type="number" id="rn-decimals" class="input-sde-utils" style="width:70px" min="0" max="10" value="0">
+    <label class="field-label" for="rn-count" style="margin:0 var(--sp-2) 0 var(--sp-3)">Count</label>
+    <input type="number" id="rn-count" class="input-sde-utils" style="width:80px" min="1" max="1000" value="10">
+  </div>
+
+  <div class="toolbar">
+    <label class="check-inline"><input type="checkbox" id="rn-nodupe"> No duplicates</label>
+    <label class="check-inline"><input type="checkbox" id="rn-sort"> Sort ascending</label>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="generate"><i class="bi bi-arrow-repeat"></i> Generate</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copyall"><i class="bi bi-clipboard-check"></i> Copy All</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download</button>
+  </div>
+
+  <div class="stat-row" id="rn-stats"></div>
+
+  <ul class="result-list" id="rn-results"></ul>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['random-number'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var minEl = $('#rn-min', root), maxEl = $('#rn-max', root);
+    var decEl = $('#rn-decimals', root), countEl = $('#rn-count', root);
+    var nodupe = $('#rn-nodupe', root), sortChk = $('#rn-sort', root);
+    var results = $('#rn-results', root);
+    var stats = $('#rn-stats', root);
+
+    var current = [];
+
+    function randomFloat() {
+      var buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0] / 4294967296; // [0, 1)
+    }
+
+    function generate() {
+      var min = parseFloat(minEl.value);
+      var max = parseFloat(maxEl.value);
+      var decimals = Math.max(0, Math.min(10, parseInt(decEl.value, 10) || 0));
+      var count = Math.max(1, Math.min(1000, parseInt(countEl.value, 10) || 1));
+      countEl.value = count;
+
+      if (isNaN(min) || isNaN(max)) { SDEUtils.toast('Enter valid min and max values', 'error'); return; }
+      if (min > max) { SDEUtils.toast('Min must be less than or equal to Max', 'error'); return; }
+
+      if (nodupe.checked && decimals === 0) {
+        var range = Math.floor(max) - Math.ceil(min) + 1;
+        if (count > range) {
+          SDEUtils.toast('Range too small for ' + count + ' unique integers (max ' + range + ')', 'error');
+          return;
+        }
+      }
+
+      var out = [];
+      var seen = {};
+      var guard = 0;
+      while (out.length < count && guard < count * 200 + 1000) {
+        guard++;
+        var v = min + randomFloat() * (max - min);
+        v = parseFloat(v.toFixed(decimals));
+        if (nodupe.checked) {
+          if (seen[v]) continue;
+          seen[v] = true;
+        }
+        out.push(v);
+      }
+      if (sortChk.checked) out.sort(function (a, b) { return a - b; });
+      current = out;
+      renderResults();
+      renderStats(current.length, min, max);
+    }
+
+    function renderResults() {
+      results.innerHTML = '';
+      current.forEach(function (n) {
+        results.appendChild(el('li', {}, [
+          el('i', { class: 'bi bi-dice-5', style: 'color:var(--accent)' }),
+          el('span', { text: String(n) }),
+          el('button', {
+            class: 'copy-inline', type: 'button', title: 'Copy',
+            onclick: function () { SDEUtils.copy(String(n)); }
+          }, [ el('i', { class: 'bi bi-clipboard' }) ])
+        ]));
+      });
+    }
+
+    function renderStats(n, min, max) {
+      stats.innerHTML = '';
+      [['bi-hash', n + ' generated'], ['bi-arrows-expand', 'range ' + min + '–' + max]].forEach(function (s) {
+        stats.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + s[0] }),
+          document.createTextNode(' ' + s[1])
+        ]));
+      });
+    }
+
+    var actions = {
+      generate: generate,
+      copyall: function () { current.length ? SDEUtils.copy(current.join('\n')) : SDEUtils.toast('Generate some numbers first', 'info'); },
+      download: function () { current.length ? SDEUtils.download('sde-utils-random-numbers.txt', current.join('\n')) : SDEUtils.toast('Nothing to download', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    [minEl, maxEl, decEl, countEl].forEach(function (inp) {
+      SDEUtils.on(inp, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+    });
+    [nodupe, sortChk].forEach(function (chk) { SDEUtils.on(chk, 'change', generate); });
+
+    generate();
+  };
+</script>

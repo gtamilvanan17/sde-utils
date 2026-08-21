@@ -1,0 +1,157 @@
+<!-- =========================================================================
+     SDE Utils — tools/lorem-ipsum.html
+     Classic placeholder text generator — words / sentences / paragraphs.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-text-paragraph"></i></div>
+  <div class="tool-header-text">
+    <h1>Lorem Ipsum</h1>
+    <p>Classic placeholder text generator. Choose paragraphs, sentences or words — copy or download the result.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="seg" role="tablist" aria-label="Unit">
+    <button class="seg-btn is-active" data-unit="paragraphs" role="tab"><i class="bi bi-justify"></i> Paragraphs</button>
+    <button class="seg-btn" data-unit="sentences" role="tab"><i class="bi bi-text-left"></i> Sentences</button>
+    <button class="seg-btn" data-unit="words" role="tab"><i class="bi bi-fonts"></i> Words</button>
+  </div>
+
+  <div class="toolbar">
+    <label class="field-label" for="li-count" style="margin:0 var(--sp-2) 0 0">Count</label>
+    <input type="number" id="li-count" class="input-sde-utils" style="width:90px" min="1" max="200" value="4">
+    <label class="check-inline"><input type="checkbox" id="li-startclassic" checked> Start with "Lorem ipsum dolor sit amet…"</label>
+    <label class="check-inline"><input type="checkbox" id="li-html"> Wrap paragraphs in &lt;p&gt;</label>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="generate"><i class="bi bi-arrow-repeat"></i> Generate</button>
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="download"><i class="bi bi-download"></i> Download</button>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="li-output">Output</label>
+    <textarea id="li-output" class="textarea-sde-utils" style="min-height:260px" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="stat-row" id="li-stats"></div>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['lorem-ipsum'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, $$ = SDEUtils.$$, el = SDEUtils.el;
+
+    var countEl = $('#li-count', root);
+    var startClassic = $('#li-startclassic', root);
+    var htmlWrap = $('#li-html', root);
+    var output = $('#li-output', root);
+    var stats = $('#li-stats', root);
+    var unit = 'paragraphs';
+
+    var WORDS = ('lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor ' +
+      'incididunt ut labore et dolore magna aliqua enim ad minim veniam quis nostrud exercitation ' +
+      'ullamco laboris nisi aliquip ex ea commodo consequat duis aute irure in reprehenderit ' +
+      'voluptate velit esse cillum eu fugiat nulla pariatur excepteur sint occaecat cupidatat non ' +
+      'proident sunt culpa qui officia deserunt mollit anim id est laborum vestibulum ante primis ' +
+      'faucibus orci luctus posuere cubilia curae praesent nec').split(' ');
+
+    var current = '';
+
+    function randInt(max) { return Math.floor(Math.random() * max); }
+    function pick() { return WORDS[randInt(WORDS.length)]; }
+
+    function makeSentence(len) {
+      var n = len || (6 + randInt(9));
+      var words = [];
+      for (var i = 0; i < n; i++) words.push(pick());
+      var s = words.join(' ');
+      return s.charAt(0).toUpperCase() + s.slice(1) + '.';
+    }
+
+    function makeParagraph(sentCount) {
+      var n = sentCount || (3 + randInt(4));
+      var sentences = [];
+      for (var i = 0; i < n; i++) sentences.push(makeSentence());
+      return sentences.join(' ');
+    }
+
+    function makeWords(n) {
+      var words = [];
+      for (var i = 0; i < n; i++) words.push(pick());
+      return words.join(' ');
+    }
+
+    function generate() {
+      var n = Math.max(1, Math.min(200, parseInt(countEl.value, 10) || 1));
+      countEl.value = n;
+      var text = '';
+      var wordCount = 0, sentCount = 0, paraCount = 0;
+
+      if (unit === 'words') {
+        text = makeWords(n);
+        wordCount = n;
+      } else if (unit === 'sentences') {
+        var sentences = [];
+        for (var i = 0; i < n; i++) sentences.push(makeSentence());
+        text = sentences.join(' ');
+        sentCount = n;
+        wordCount = text.split(/\s+/).length;
+      } else {
+        var paras = [];
+        for (var p = 0; p < n; p++) paras.push(makeParagraph());
+        if (startClassic.checked) {
+          paras[0] = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ' + paras[0].replace(/^\S+\s*/, '');
+        }
+        if (htmlWrap.checked) {
+          text = paras.map(function (pp) { return '<p>' + pp + '</p>'; }).join('\n\n');
+        } else {
+          text = paras.join('\n\n');
+        }
+        paraCount = n;
+        wordCount = paras.join(' ').split(/\s+/).length;
+      }
+
+      current = text;
+      output.value = text;
+      renderStats(wordCount, paraCount, sentCount);
+    }
+
+    function renderStats(words, paras, sents) {
+      stats.innerHTML = '';
+      var chips = [['bi-fonts', words + ' words']];
+      if (paras) chips.push(['bi-justify', paras + ' paragraphs']);
+      if (sents) chips.push(['bi-text-left', sents + ' sentences']);
+      chips.push(['bi-textarea-t', current.length + ' characters']);
+      chips.forEach(function (s) {
+        stats.appendChild(el('span', { class: 'stat-chip' }, [
+          el('i', { class: 'bi ' + s[0] }),
+          document.createTextNode(' ' + s[1])
+        ]));
+      });
+    }
+
+    var actions = {
+      generate: generate,
+      copy: function () { current ? SDEUtils.copy(current) : SDEUtils.toast('Nothing to copy', 'info'); },
+      download: function () { current ? SDEUtils.download('lorem-ipsum.txt', current) : SDEUtils.toast('Nothing to download', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(root, 'click', '.seg-btn', function (e, node) {
+      unit = node.dataset.unit;
+      $$('.seg-btn', root).forEach(function (b) { b.classList.toggle('is-active', b === node); });
+      generate();
+    });
+
+    [startClassic, htmlWrap].forEach(function (chk) { SDEUtils.on(chk, 'change', generate); });
+    SDEUtils.on(countEl, 'keydown', function (e) { if (e.key === 'Enter') generate(); });
+
+    generate();
+  };
+</script>

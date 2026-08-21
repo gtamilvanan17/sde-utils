@@ -1,0 +1,119 @@
+<!-- =========================================================================
+     SDE Utils — tools/glassmorphism-generator.html
+     Generate frosted-glass CSS effects with live preview + copy CSS.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-front"></i></div>
+  <div class="tool-header-text">
+    <h1>Glassmorphism Generator</h1>
+    <p>Generate frosted-glass CSS effects — background blur, transparency and border — with a live preview.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="gm-blur">Blur: <strong id="gm-blurval">8</strong>px</label>
+      <input type="range" id="gm-blur" min="0" max="40" value="8" style="width:100%; accent-color:var(--accent);">
+    </div>
+    <div class="field">
+      <label class="field-label" for="gm-opacity">Background opacity: <strong id="gm-opacityval">25</strong>%</label>
+      <input type="range" id="gm-opacity" min="0" max="100" value="25" style="width:100%; accent-color:var(--accent);">
+    </div>
+  </div>
+
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="gm-border">Border opacity: <strong id="gm-borderval">30</strong>%</label>
+      <input type="range" id="gm-border" min="0" max="100" value="30" style="width:100%; accent-color:var(--accent);">
+    </div>
+    <div class="field">
+      <label class="field-label" for="gm-radius">Border radius: <strong id="gm-radiusval">16</strong>px</label>
+      <input type="range" id="gm-radius" min="0" max="48" value="16" style="width:100%; accent-color:var(--accent);">
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="field-label" for="gm-color" style="margin:0 var(--sp-2) 0 0">Tint color</label>
+    <input type="color" id="gm-color" value="#ffffff" style="width:44px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer;">
+  </div>
+
+  <div class="gm-preview-wrap" id="gm-preview-wrap">
+    <div class="gm-card" id="gm-card">Glass card</div>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="gm-output">CSS</label>
+    <textarea id="gm-output" class="textarea-sde-utils" style="min-height:110px" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy CSS</button>
+  </div>
+</div>
+
+<style>
+  .gm-preview-wrap {
+    padding:var(--sp-8); border-radius:var(--radius-md); margin:var(--sp-4) 0; min-height:180px;
+    display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(135deg, #6366f1, #ec4899, #f59e0b);
+  }
+  .gm-card { width:220px; height:120px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:var(--fw-medium); text-shadow:0 1px 2px rgba(0,0,0,0.2); }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['glassmorphism-generator'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$;
+
+    var blurEl = $('#gm-blur', root), opacityEl = $('#gm-opacity', root);
+    var borderEl = $('#gm-border', root), radiusEl = $('#gm-radius', root), colorEl = $('#gm-color', root);
+    var card = $('#gm-card', root), output = $('#gm-output', root);
+
+    function hexToRgb(hex) {
+      var h = hex.replace('#','');
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+
+    function render() {
+      $('#gm-blurval', root).textContent = blurEl.value;
+      $('#gm-opacityval', root).textContent = opacityEl.value;
+      $('#gm-borderval', root).textContent = borderEl.value;
+      $('#gm-radiusval', root).textContent = radiusEl.value;
+
+      var rgb = hexToRgb(colorEl.value);
+      var bg = 'rgba(' + rgb.join(', ') + ', ' + (opacityEl.value/100).toFixed(2) + ')';
+      var borderColor = 'rgba(' + rgb.join(', ') + ', ' + (borderEl.value/100).toFixed(2) + ')';
+      var blur = blurEl.value + 'px';
+      var radius = radiusEl.value + 'px';
+
+      card.style.background = bg;
+      card.style.backdropFilter = 'blur(' + blur + ')';
+      card.style.webkitBackdropFilter = 'blur(' + blur + ')';
+      card.style.border = '1px solid ' + borderColor;
+      card.style.borderRadius = radius;
+      card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.15)';
+
+      output.value = [
+        'background: ' + bg + ';',
+        'backdrop-filter: blur(' + blur + ');',
+        '-webkit-backdrop-filter: blur(' + blur + ');',
+        'border: 1px solid ' + borderColor + ';',
+        'border-radius: ' + radius + ';',
+        'box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);'
+      ].join('\n');
+    }
+
+    var actions = { copy: function () { output.value ? SDEUtils.copy(output.value) : SDEUtils.toast('Nothing to copy', 'info'); } };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    [blurEl, opacityEl, borderEl, radiusEl].forEach(function (r) { SDEUtils.on(r, 'input', render); });
+    SDEUtils.on(colorEl, 'input', render);
+
+    render();
+  };
+</script>

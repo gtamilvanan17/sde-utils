@@ -1,0 +1,154 @@
+<!-- =========================================================================
+     SDE Utils — tools/markdown-preview.html
+     Live-render Markdown as you type. Self-contained parser, no dependency.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-markdown"></i></div>
+  <div class="tool-header-text">
+    <h1>Markdown Preview</h1>
+    <p>Live-render Markdown as you type — headers, emphasis, links, lists, code blocks and blockquotes. Fully offline.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="mp-input">Markdown</label>
+      <textarea id="mp-input" class="textarea-sde-utils" style="min-height:360px" spellcheck="false" placeholder="# Hello&#10;&#10;Type some **markdown** here..."></textarea>
+    </div>
+    <div class="field">
+      <label class="field-label">Preview</label>
+      <div id="mp-preview" class="code-output mp-preview"></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="sample"><i class="bi bi-lightbulb"></i> Sample</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="clear"><i class="bi bi-x-circle"></i> Clear</button>
+  </div>
+</div>
+
+<style>
+  .mp-preview { min-height:360px; overflow:auto; }
+  .mp-preview h1, .mp-preview h2, .mp-preview h3 { margin:0.6em 0 0.3em; color:var(--text); }
+  .mp-preview p { margin:0.4em 0; line-height:1.6; }
+  .mp-preview code { background:var(--surface-2); padding:0.1em 0.35em; border-radius:4px; font-family:var(--font-mono, monospace); }
+  .mp-preview pre { background:var(--surface-2); padding:var(--sp-3); border-radius:var(--radius-md); overflow:auto; }
+  .mp-preview pre code { background:none; padding:0; }
+  .mp-preview blockquote { border-left:3px solid var(--border-strong); margin:0.4em 0; padding:0.2em 0.8em; color:var(--text-muted); }
+  .mp-preview ul, .mp-preview ol { padding-left:1.4em; margin:0.4em 0; }
+  .mp-preview a { color:var(--accent); }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+
+  /* Shared minimal markdown -> HTML parser (also used by markdown-to-html.html) */
+  window.SDEUtilsMarkdown = window.SDEUtilsMarkdown || function (src, escapeHtml) {
+    var lines = src.replace(/\r\n?/g, '\n').split('\n');
+    var html = [];
+    var i = 0;
+    var inCode = false, codeLang = '', codeLines = [];
+    var listStack = []; // {type, items}
+
+    function closeLists() {
+      while (listStack.length) {
+        var l = listStack.pop();
+        html.push('<' + (l.type === 'ol' ? '/ol' : '/ul') + '>');
+      }
+    }
+
+    function inlineFmt(text) {
+      text = escapeHtml(text);
+      text = text.replace(/`([^`]+)`/g, function (m, code) { return '<code>' + code + '</code>'; });
+      text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">');
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      text = text.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, function (m, a, b) { return '<strong>' + (a || b) + '</strong>'; });
+      text = text.replace(/\*([^*]+)\*|_([^_]+)_/g, function (m, a, b) { return '<em>' + (a || b) + '</em>'; });
+      return text;
+    }
+
+    for (i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      var fence = /^```(\S*)\s*$/.exec(line);
+      if (fence) {
+        if (!inCode) { inCode = true; codeLang = fence[1]; codeLines = []; }
+        else {
+          html.push('<pre><code' + (codeLang ? ' class="language-' + codeLang + '"' : '') + '>' +
+            escapeHtml(codeLines.join('\n')) + '</code></pre>');
+          inCode = false;
+        }
+        continue;
+      }
+      if (inCode) { codeLines.push(line); continue; }
+
+      if (!line.trim()) { closeLists(); continue; }
+
+      var h = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (h) {
+        closeLists();
+        var level = h[1].length;
+        html.push('<h' + level + '>' + inlineFmt(h[2]) + '</h' + level + '>');
+        continue;
+      }
+
+      var bq = /^>\s?(.*)$/.exec(line);
+      if (bq) {
+        closeLists();
+        html.push('<blockquote>' + inlineFmt(bq[1]) + '</blockquote>');
+        continue;
+      }
+
+      var ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+      var ul = /^\s*[-*+]\s+(.*)$/.exec(line);
+      if (ol || ul) {
+        var type = ol ? 'ol' : 'ul';
+        var content = (ol || ul)[1];
+        if (!listStack.length || listStack[listStack.length - 1].type !== type) {
+          closeLists();
+          html.push('<' + type + '>');
+          listStack.push({ type: type });
+        }
+        html.push('<li>' + inlineFmt(content) + '</li>');
+        continue;
+      }
+
+      closeLists();
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) { html.push('<hr>'); continue; }
+      html.push('<p>' + inlineFmt(line) + '</p>');
+    }
+    closeLists();
+    if (inCode) {
+      html.push('<pre><code>' + escapeHtml(codeLines.join('\n')) + '</code></pre>');
+    }
+    return html.join('\n');
+  };
+
+  window.SDEUtilsTools['markdown-preview'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$;
+    var input = $('#mp-input', root), preview = $('#mp-preview', root);
+
+    var SAMPLE = '# Markdown Preview\n\nType **bold**, *italic*, or `inline code`.\n\n' +
+      '## Lists\n\n- First item\n- Second item\n  1. Nested? (kept flat)\n\n' +
+      '> A blockquote example.\n\n```js\nfunction hello() {\n  console.log("hi");\n}\n```\n\n' +
+      'A [link](https://example.com) and more text.';
+
+    function render() {
+      preview.innerHTML = window.SDEUtilsMarkdown(input.value, SDEUtils.escapeHtml);
+    }
+
+    var actions = {
+      sample: function () { input.value = SAMPLE; render(); },
+      clear: function () { input.value = ''; render(); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(input, 'input', SDEUtils.debounce(render, 120));
+    input.value = SAMPLE;
+    render();
+  };
+</script>

@@ -1,0 +1,108 @@
+<!-- =========================================================================
+     SDE Utils — tools/neumorphism-generator.html
+     Generate soft neumorphic shadows with live preview + copy CSS.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-square-half"></i></div>
+  <div class="tool-header-text">
+    <h1>Neumorphism Generator</h1>
+    <p>Generate soft neumorphic (soft-UI) shadows for cards and buttons, with a live preview and copy-ready CSS.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="toolbar">
+    <label class="field-label" for="nm-bg" style="margin:0 var(--sp-2) 0 0">Base color</label>
+    <input type="color" id="nm-bg" value="#e0e0e0" style="width:44px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer;">
+    <label class="check-inline"><input type="checkbox" id="nm-inset"> Inset (pressed)</label>
+  </div>
+
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="nm-distance">Distance: <strong id="nm-distanceval">20</strong>px</label>
+      <input type="range" id="nm-distance" min="0" max="50" value="20" style="width:100%; accent-color:var(--accent);">
+    </div>
+    <div class="field">
+      <label class="field-label" for="nm-blur">Blur: <strong id="nm-blurval">40</strong>px</label>
+      <input type="range" id="nm-blur" min="0" max="80" value="40" style="width:100%; accent-color:var(--accent);">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="nm-intensity">Intensity: <strong id="nm-intensityval">15</strong>%</label>
+    <input type="range" id="nm-intensity" min="1" max="40" value="15" style="width:100%; accent-color:var(--accent);">
+  </div>
+
+  <div class="nm-preview-wrap" id="nm-preview-wrap">
+    <div class="nm-card" id="nm-card"></div>
+  </div>
+
+  <div class="field">
+    <label class="field-label" for="nm-output">CSS</label>
+    <textarea id="nm-output" class="textarea-sde-utils" style="min-height:70px" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy CSS</button>
+  </div>
+</div>
+
+<style>
+  .nm-preview-wrap { padding:var(--sp-8); border-radius:var(--radius-md); margin:var(--sp-4) 0; display:flex; align-items:center; justify-content:center; }
+  .nm-card { width:160px; height:120px; border-radius:24px; transition:box-shadow 0.2s ease; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['neumorphism-generator'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$;
+
+    var bgEl = $('#nm-bg', root), insetEl = $('#nm-inset', root);
+    var distanceEl = $('#nm-distance', root), blurEl = $('#nm-blur', root), intensityEl = $('#nm-intensity', root);
+    var wrap = $('#nm-preview-wrap', root), card = $('#nm-card', root), output = $('#nm-output', root);
+
+    function shade(hex, percent) {
+      var h = hex.replace('#','');
+      var r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      var amt = Math.round(2.55 * percent);
+      var clamp = function (v) { return Math.max(0, Math.min(255, v)); };
+      var toHex = function (v) { return clamp(v).toString(16).padStart(2,'0'); };
+      return '#' + toHex(r + amt) + toHex(g + amt) + toHex(b + amt);
+    }
+
+    function render() {
+      $('#nm-distanceval', root).textContent = distanceEl.value;
+      $('#nm-blurval', root).textContent = blurEl.value;
+      $('#nm-intensityval', root).textContent = intensityEl.value;
+
+      var bg = bgEl.value;
+      var intensity = parseInt(intensityEl.value, 10);
+      var light = shade(bg, intensity);
+      var dark = shade(bg, -intensity);
+      var d = distanceEl.value, blur = blurEl.value;
+      var inset = insetEl.checked ? 'inset ' : '';
+
+      var shadow = inset + d + 'px ' + d + 'px ' + blur + 'px ' + dark + ', ' +
+                   inset + '-' + d + 'px -' + d + 'px ' + blur + 'px ' + light;
+
+      wrap.style.background = bg;
+      card.style.background = bg;
+      card.style.boxShadow = shadow;
+
+      output.value = 'background: ' + bg + ';\nbox-shadow: ' + shadow + ';';
+    }
+
+    var actions = { copy: function () { output.value ? SDEUtils.copy(output.value) : SDEUtils.toast('Nothing to copy', 'info'); } };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    [distanceEl, blurEl, intensityEl].forEach(function (r) { SDEUtils.on(r, 'input', render); });
+    SDEUtils.on(bgEl, 'input', render);
+    SDEUtils.on(insetEl, 'change', render);
+
+    render();
+  };
+</script>

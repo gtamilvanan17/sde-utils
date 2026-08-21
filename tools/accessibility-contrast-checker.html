@@ -1,0 +1,136 @@
+<!-- =========================================================================
+     SDE Utils — tools/accessibility-contrast-checker.html
+     WCAG contrast ratio checker for foreground/background color pairs.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-universal-access"></i></div>
+  <div class="tool-header-text">
+    <h1>Accessibility Contrast Checker</h1>
+    <p>Check the WCAG contrast ratio between a foreground and background color, with AA/AAA pass-fail for normal and large text.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="ac-fg">Foreground (text)</label>
+      <div class="input-row">
+        <input type="color" id="ac-fg-picker" value="#111827" style="width:44px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer;">
+        <input type="text" id="ac-fg" class="input-sde-utils" value="#111827" spellcheck="false">
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="ac-bg">Background</label>
+      <div class="input-row">
+        <input type="color" id="ac-bg-picker" value="#ffffff" style="width:44px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer;">
+        <input type="text" id="ac-bg" class="input-sde-utils" value="#ffffff" spellcheck="false">
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-sde-utils btn-sde-utils-ghost" data-act="swap"><i class="bi bi-arrow-down-up"></i> Swap</button>
+
+  <div id="ac-preview" class="ac-preview">
+    <p style="font-size:14px; margin:0 0 8px;">Normal text sample (14px)</p>
+    <p style="font-size:24px; font-weight:700; margin:0;">Large text sample (24px bold)</p>
+  </div>
+
+  <div class="stat-row" id="ac-stats"></div>
+
+  <div id="ac-grades" class="ac-grades"></div>
+</div>
+
+<style>
+  .ac-preview { padding:var(--sp-6); border-radius:var(--radius-md); border:1px solid var(--border); margin:var(--sp-4) 0; }
+  .ac-grades { display:grid; grid-template-columns:repeat(2, 1fr); gap:var(--sp-3); margin-top:var(--sp-3); }
+  .ac-grade { padding:var(--sp-3); border-radius:var(--radius-md); border:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .ac-grade.pass { background: var(--badge-new-bg); }
+  .ac-grade.fail { background: rgba(220,38,38,0.10); }
+  .ac-grade strong { font-size:var(--fs-lg, 1.1rem); }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['accessibility-contrast-checker'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var fgText = $('#ac-fg', root), fgPicker = $('#ac-fg-picker', root);
+    var bgText = $('#ac-bg', root), bgPicker = $('#ac-bg-picker', root);
+    var preview = $('#ac-preview', root), stats = $('#ac-stats', root), grades = $('#ac-grades', root);
+
+    function normalizeHex(hex) {
+      hex = (hex || '').trim().replace(/^#/, '');
+      if (/^[0-9a-f]{3}$/i.test(hex)) hex = hex.split('').map(function (c) { return c+c; }).join('');
+      if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+      return '#' + hex.toLowerCase();
+    }
+
+    function relLuminance(hex) {
+      var h = hex.replace('#','');
+      var rgb = [0,2,4].map(function (i) {
+        var v = parseInt(h.slice(i,i+2),16) / 255;
+        return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+      });
+      return 0.2126*rgb[0] + 0.7152*rgb[1] + 0.0722*rgb[2];
+    }
+
+    function contrastRatio(hex1, hex2) {
+      var l1 = relLuminance(hex1), l2 = relLuminance(hex2);
+      var lighter = Math.max(l1, l2), darker = Math.min(l1, l2);
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    function render() {
+      var fg = normalizeHex(fgText.value);
+      var bg = normalizeHex(bgText.value);
+      if (!fg || !bg) { SDEUtils.toast('Enter valid hex colors for both fields', 'error'); return; }
+      fgPicker.value = fg; bgPicker.value = bg;
+
+      var ratio = contrastRatio(fg, bg);
+      preview.style.color = fg;
+      preview.style.background = bg;
+
+      stats.innerHTML = '';
+      stats.appendChild(el('span', { class: 'stat-chip' }, [
+        el('i', { class: 'bi bi-rulers' }),
+        el('strong', { text: ratio.toFixed(2) }),
+        document.createTextNode(' : 1 contrast ratio')
+      ]));
+
+      var checks = [
+        ['AA · Normal text', ratio >= 4.5],
+        ['AA · Large text', ratio >= 3],
+        ['AAA · Normal text', ratio >= 7],
+        ['AAA · Large text', ratio >= 4.5]
+      ];
+      grades.innerHTML = '';
+      checks.forEach(function (c) {
+        grades.appendChild(el('div', { class: 'ac-grade ' + (c[1] ? 'pass' : 'fail') }, [
+          el('span', { text: c[0] }),
+          el('strong', { text: c[1] ? 'Pass' : 'Fail', style: 'color:' + (c[1] ? 'var(--success)' : 'var(--danger)') })
+        ]));
+      });
+    }
+
+    var actions = {
+      swap: function () {
+        var t = fgText.value; fgText.value = bgText.value; bgText.value = t;
+        render();
+      }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(fgText, 'change', render);
+    SDEUtils.on(bgText, 'change', render);
+    SDEUtils.on(fgText, 'keydown', function (e) { if (e.key === 'Enter') render(); });
+    SDEUtils.on(bgText, 'keydown', function (e) { if (e.key === 'Enter') render(); });
+    SDEUtils.on(fgPicker, 'input', function () { fgText.value = fgPicker.value; render(); });
+    SDEUtils.on(bgPicker, 'input', function () { bgText.value = bgPicker.value; render(); });
+
+    render();
+  };
+</script>

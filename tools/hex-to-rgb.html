@@ -1,0 +1,169 @@
+<!-- =========================================================================
+     SDE Utils — tools/hex-to-rgb.html
+     Bidirectional HEX ⇄ RGB ⇄ HSL conversion with live preview swatch.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-palette"></i></div>
+  <div class="tool-header-text">
+    <h1>HEX ↔ RGB</h1>
+    <p>Convert between HEX, RGB and HSL color formats with a live preview swatch. Edit any field — the others update instantly.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="hr-hex">HEX</label>
+      <input type="text" id="hr-hex" class="input-sde-utils" placeholder="#3b82f6" spellcheck="false">
+    </div>
+    <div class="field">
+      <input type="color" id="hr-picker" style="width:100%; height:44px; border:1px solid var(--border); border-radius:var(--radius-md); background:none; cursor:pointer;">
+    </div>
+  </div>
+
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="hr-rgb">RGB</label>
+      <input type="text" id="hr-rgb" class="input-sde-utils" placeholder="rgb(59, 130, 246)" spellcheck="false">
+    </div>
+    <div class="field">
+      <label class="field-label" for="hr-hsl">HSL</label>
+      <input type="text" id="hr-hsl" class="input-sde-utils" placeholder="hsl(217, 91%, 60%)" spellcheck="false">
+    </div>
+  </div>
+
+  <div id="hr-swatch" class="hr-swatch"></div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copyhex"><i class="bi bi-clipboard"></i> Copy HEX</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="copyrgb"><i class="bi bi-clipboard"></i> Copy RGB</button>
+    <button class="btn-sde-utils btn-sde-utils-secondary" data-act="copyhsl"><i class="bi bi-clipboard"></i> Copy HSL</button>
+  </div>
+</div>
+
+<style>
+  .hr-swatch { height:100px; border-radius:var(--radius-md); border:1px solid var(--border); margin:var(--sp-4) 0; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['hex-to-rgb'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$;
+
+    var hexEl = $('#hr-hex', root), rgbEl = $('#hr-rgb', root), hslEl = $('#hr-hsl', root);
+    var pickerEl = $('#hr-picker', root), swatch = $('#hr-swatch', root);
+
+    function normalizeHex(hex) {
+      hex = hex.trim().replace(/^#/, '');
+      if (/^[0-9a-f]{3}$/i.test(hex)) hex = hex.split('').map(function (c) { return c+c; }).join('');
+      if (!/^[0-9a-f]{6}$/i.test(hex)) return null;
+      return '#' + hex.toLowerCase();
+    }
+
+    function hexToRgb(hex) {
+      var h = hex.replace('#','');
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+
+    function rgbToHex(r,g,b) {
+      var toHex = function (v) { return Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0'); };
+      return '#' + toHex(r) + toHex(g) + toHex(b);
+    }
+
+    function rgbToHsl(r,g,b) {
+      r/=255; g/=255; b/=255;
+      var max=Math.max(r,g,b), min=Math.min(r,g,b);
+      var h,s,l=(max+min)/2;
+      if (max===min) h=s=0;
+      else {
+        var d=max-min;
+        s = l>0.5 ? d/(2-max-min) : d/(max+min);
+        switch(max){
+          case r: h=(g-b)/d+(g<b?6:0); break;
+          case g: h=(b-r)/d+2; break;
+          default: h=(r-g)/d+4;
+        }
+        h*=60;
+      }
+      return [Math.round(h), Math.round(s*100), Math.round(l*100)];
+    }
+
+    function hslToRgb(h,s,l) {
+      h=((h%360)+360)%360; s/=100; l/=100;
+      var c=(1-Math.abs(2*l-1))*s;
+      var x=c*(1-Math.abs((h/60)%2-1));
+      var m=l-c/2;
+      var r,g,b;
+      if (h<60) [r,g,b]=[c,x,0];
+      else if (h<120) [r,g,b]=[x,c,0];
+      else if (h<180) [r,g,b]=[0,c,x];
+      else if (h<240) [r,g,b]=[0,x,c];
+      else if (h<300) [r,g,b]=[x,0,c];
+      else [r,g,b]=[c,0,x];
+      return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
+    }
+
+    function parseRgbString(str) {
+      var m = /rgba?\(?\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(str);
+      if (!m) return null;
+      return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10)].map(function (v) { return Math.max(0, Math.min(255, v)); });
+    }
+
+    function parseHslString(str) {
+      var m = /hsla?\(?\s*(\d+)\s*,\s*(\d+)%?\s*,\s*(\d+)%?/i.exec(str);
+      if (!m) return null;
+      return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10)];
+    }
+
+    function applyFromHex(hex, skip) {
+      var norm = normalizeHex(hex);
+      if (!norm) return false;
+      var rgb = hexToRgb(norm);
+      var hsl = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+      if (skip !== 'hex') hexEl.value = norm;
+      if (skip !== 'rgb') rgbEl.value = 'rgb(' + rgb.join(', ') + ')';
+      if (skip !== 'hsl') hslEl.value = 'hsl(' + hsl[0] + ', ' + hsl[1] + '%, ' + hsl[2] + '%)';
+      pickerEl.value = norm;
+      swatch.style.background = norm;
+      return true;
+    }
+
+    function fromHex() {
+      if (!applyFromHex(hexEl.value)) SDEUtils.toast('Invalid HEX color', 'error');
+    }
+    function fromRgb() {
+      var rgb = parseRgbString(rgbEl.value);
+      if (!rgb) { SDEUtils.toast('Invalid RGB value', 'error'); return; }
+      var hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+      applyFromHex(hex, 'rgb');
+    }
+    function fromHsl() {
+      var hsl = parseHslString(hslEl.value);
+      if (!hsl) { SDEUtils.toast('Invalid HSL value', 'error'); return; }
+      var rgb = hslToRgb(hsl[0], hsl[1], hsl[2]);
+      var hex = rgbToHex(rgb[0], rgb[1], rgb[2]);
+      applyFromHex(hex, 'hsl');
+    }
+
+    SDEUtils.on(hexEl, 'change', fromHex);
+    SDEUtils.on(rgbEl, 'change', fromRgb);
+    SDEUtils.on(hslEl, 'change', fromHsl);
+    SDEUtils.on(hexEl, 'keydown', function (e) { if (e.key === 'Enter') fromHex(); });
+    SDEUtils.on(rgbEl, 'keydown', function (e) { if (e.key === 'Enter') fromRgb(); });
+    SDEUtils.on(hslEl, 'keydown', function (e) { if (e.key === 'Enter') fromHsl(); });
+    SDEUtils.on(pickerEl, 'input', function () { applyFromHex(pickerEl.value); });
+
+    var actions = {
+      copyhex: function () { SDEUtils.copy(hexEl.value); },
+      copyrgb: function () { SDEUtils.copy(rgbEl.value); },
+      copyhsl: function () { SDEUtils.copy(hslEl.value); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    applyFromHex('#3b82f6');
+  };
+</script>

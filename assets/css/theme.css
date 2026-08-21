@@ -1,0 +1,309 @@
+/* =========================================================================
+   SDE Utils — theme.css
+   The single design-token layer. Every color, shadow, radius, space, and
+   type value lives here as a CSS custom property. All other stylesheets
+   consume these tokens — never hardcode raw values elsewhere.
+
+   Structure:
+     1. Accent palette (fixed blue & white theme)
+     2. Global tokens (radius, spacing, type, transitions, z-index)
+     3. Light theme  [data-theme="light"]
+     4. Dark theme   [data-theme="dark"]
+     5. Base element + selection styling
+   ========================================================================= */
+
+:root {
+  /* ---------------------------------------------------------------------
+     1. ACCENT PALETTE — fixed blue & white theme, no accent switcher.
+     --------------------------------------------------------------------- */
+  --accent-blue-500:     #3b82f6;
+  --accent-blue-600:     #2563eb;
+  --accent-blue-700:     #1d4ed8;
+
+  /* Single fixed accent: blue. SDE Utils is a blue & white theme —
+     no accent switcher, this is the only palette. */
+  --accent:        var(--accent-blue-600);
+  --accent-strong: var(--accent-blue-700);
+  --accent-soft:   var(--accent-blue-500);
+  /* Translucent accent tints used for focus rings, hover washes, badges */
+  --accent-rgb:    37, 99, 235;               /* keep in sync with --accent */
+  --accent-tint:   rgba(var(--accent-rgb), 0.10);
+  --accent-tint-2: rgba(var(--accent-rgb), 0.16);
+  --accent-ring:   rgba(var(--accent-rgb), 0.35);
+
+  /* ---------------------------------------------------------------------
+     2. GLOBAL TOKENS (theme-independent)
+     --------------------------------------------------------------------- */
+
+  /* Typography — FlexAdmin: Sora for headings, Manrope for body */
+  --font-ui:   'Manrope', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Sora', 'Manrope', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Courier New', monospace;
+
+  --fs-xs:   0.75rem;    /* 12 */
+  --fs-sm:   0.8125rem;  /* 13 */
+  --fs-base: 0.875rem;   /* 14 */
+  --fs-md:   1rem;       /* 16 */
+  --fs-lg:   1.125rem;   /* 18 */
+  --fs-xl:   1.375rem;   /* 22 */
+  --fs-2xl:  1.75rem;    /* 28 */
+  --fs-3xl:  2.25rem;    /* 36 */
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --lh-tight: 1.25;
+  --lh-base:  1.6;
+
+  /* Spacing scale (4px base) */
+  --sp-1:  0.25rem;
+  --sp-2:  0.5rem;
+  --sp-3:  0.75rem;
+  --sp-4:  1rem;
+  --sp-5:  1.5rem;
+  --sp-6:  2rem;
+  --sp-7:  2.5rem;
+  --sp-8:  3rem;
+
+  /* Radii — FlexAdmin: rounded, modern */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 999px;
+
+  /* Layout metrics */
+  --navbar-h:    64px;
+  --sidebar-w:   260px;
+  --content-max: 1080px;
+
+  /* Motion */
+  --ease:        cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast:    120ms;
+  --dur-base:    200ms;
+  --dur-slow:    320ms;
+  --transition:  var(--dur-base) var(--ease);
+
+  /* Z-index layers */
+  --z-sidebar:   46;
+  --z-navbar:    50;
+  --z-backdrop:  45;
+  --z-palette:   80;
+  --z-toast:     90;
+}
+
+/* ==========================================================================
+   3. LIGHT THEME
+   Blue & white theme: clean white surfaces, soft shadows, blue accents.
+   ========================================================================== */
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg:            #f0f2f5;
+  --bg-subtle:     #e8eaed;
+  --surface:       #ffffff;
+  --surface-2:     #f8f9fa;
+  --surface-hover: #f0f2f5;
+  --navbar-bg:     rgba(255, 255, 255, 0.85);
+  --sidebar-bg:    #ffffff;
+
+  /* Text */
+  --text:          #020617;
+  --text-muted:    #475569;
+  --text-subtle:   #64748b;
+  --text-inverse:  #ffffff;
+
+  /* Borders & dividers */
+  --border:        #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Code blocks */
+  --code-bg:       #eff6ff;
+  --code-text:     #1d4ed8;
+
+  /* Shadows — FlexAdmin: layered, refined */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 0 4px var(--accent-ring);
+
+  /* Semantic status colors */
+  --success: #059669;
+  --danger:  #dc2626;
+  --warning: #d97706;
+  --info:    #2563eb;
+
+  /* Badge backgrounds — kept within the blue & white theme:
+     accent-filled for the highlighted badge, neutral slate for the rest. */
+  --badge-new-bg:     rgba(37, 99, 235, 0.12);
+  --badge-new-text:   #1d4ed8;
+  --badge-hot-bg:     rgba(37, 99, 235, 0.12);
+  --badge-hot-text:   #1d4ed8;
+  --badge-niche-bg:   #eef2f7;
+  --badge-niche-text: #475569;
+}
+
+/* ==========================================================================
+   4. DARK THEME
+   Deep slate surfaces, elevated cards, glowy blue accents.
+   ========================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg:            #0f172a;
+  --bg-subtle:     #1e293b;
+  --surface:       #1e293b;
+  --surface-2:     #273548;
+  --surface-hover: #334155;
+  --navbar-bg:     rgba(15, 23, 42, 0.80);
+  --sidebar-bg:    #1e293b;
+
+  /* Text */
+  --text:          #f8fafc;
+  --text-muted:    #cbd5e1;
+  --text-subtle:   #64748b;
+  --text-inverse:  #0f172a;
+
+  /* Borders & dividers */
+  --border:        #334155;
+  --border-strong: #475569;
+
+  /* Code blocks */
+  --code-bg:       #0f172a;
+  --code-text:     #60a5fa;
+
+  /* Shadows — deeper for dark surfaces */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.50), 0 4px 6px -4px rgba(0, 0, 0, 0.30);
+  --shadow-glow: 0 0 0 4px var(--accent-ring);
+
+  /* Semantic status colors (brightened for dark bg) */
+  --success: #34d399;
+  --danger:  #f87171;
+  --warning: #fbbf24;
+  --info:    #60a5fa;
+
+  /* Badge backgrounds — blue & white theme, brightened for dark bg */
+  --badge-new-bg:     rgba(96, 165, 250, 0.18);
+  --badge-new-text:   #93c5fd;
+  --badge-hot-bg:     rgba(96, 165, 250, 0.18);
+  --badge-hot-text:   #93c5fd;
+  --badge-niche-bg:   rgba(203, 213, 225, 0.14);
+  --badge-niche-text: #cbd5e1;
+}
+
+/* ==========================================================================
+   6. BASE ELEMENTS
+   Minimal resets that consume the tokens. Layout lives in style.css.
+   ========================================================================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-base);
+  color: var(--text);
+  background-color: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--dur-slow) var(--ease),
+              color var(--dur-slow) var(--ease);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+a:hover { color: var(--accent-strong); }
+
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+code {
+  background: var(--code-bg);
+  color: var(--code-text);
+  padding: 0.12em 0.4em;
+  border-radius: var(--radius-xs);
+}
+
+kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  padding: 0.1em 0.45em;
+  line-height: 1;
+}
+
+/* Accessible focus ring for keyboard users */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow);
+  border-radius: var(--radius-sm);
+}
+
+/* Text selection uses the accent tint */
+::selection {
+  background: var(--accent-tint-2);
+  color: var(--text);
+}
+
+/* ---- Custom scrollbars (WebKit + Firefox) ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar        { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track  { background: transparent; }
+*::-webkit-scrollbar-thumb  {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

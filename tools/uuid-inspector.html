@@ -1,0 +1,140 @@
+<!-- =========================================================================
+     SDE Utils — tools/uuid-inspector.html
+     Decode version & variant from a UUID; decode v1/v7 embedded timestamps.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-search"></i></div>
+  <div class="tool-header-text">
+    <h1>UUID Inspector</h1>
+    <p>Paste a UUID to decode its version, variant, and — for time-based UUIDs (v1, v7) — the embedded timestamp.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="field">
+    <label class="field-label" for="ui-input">UUID</label>
+    <input type="text" id="ui-input" class="input-sde-utils" placeholder="e.g. 018f2f3a-... or 550e8400-e29b-41d4-a716-446655440000" spellcheck="false">
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="inspect"><i class="bi bi-search"></i> Inspect</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="sample"><i class="bi bi-lightbulb"></i> Sample v7</button>
+    <button class="btn-sde-utils btn-sde-utils-ghost" data-act="clear"><i class="bi bi-x-circle"></i> Clear</button>
+  </div>
+
+  <div id="ui-result"></div>
+</div>
+
+<style>
+  .ui-row { display:flex; justify-content:space-between; gap:var(--sp-3); padding:var(--sp-2) 0; border-bottom:1px solid var(--border); font-size:var(--fs-sm); }
+  .ui-row:last-child { border-bottom:none; }
+  .ui-row .ui-k { color:var(--text-muted); }
+  .ui-row .ui-v { color:var(--text); font-weight:var(--fw-medium); font-family:var(--font-mono, monospace); text-align:right; }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['uuid-inspector'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var input = $('#ui-input', root);
+    var resultEl = $('#ui-result', root);
+
+    function parse(raw) {
+      var clean = raw.trim().replace(/[{}]/g, '');
+      var re = /^([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})$/i;
+      var m = re.exec(clean);
+      if (!m) return null;
+      var hex = (m[1] + m[2] + m[3] + m[4] + m[5]).toLowerCase();
+      return { hex: hex, formatted: m[1] + '-' + m[2] + '-' + m[3] + '-' + m[4] + '-' + m[5] };
+    }
+
+    function variantOf(hex) {
+      var nibble = parseInt(hex[16], 16); // first nibble of clock_seq_hi
+      if ((nibble & 0x8) === 0) return 'NCS (reserved, backward compat)';
+      if ((nibble & 0xc) === 0x8) return 'RFC 4122';
+      if ((nibble & 0xe) === 0xc) return 'Microsoft (reserved)';
+      return 'Future / reserved';
+    }
+
+    function decodeV1(hex) {
+      var timeLow = hex.slice(0, 8);
+      var timeMid = hex.slice(8, 12);
+      var timeHi = hex.slice(12, 16).replace(/^1/, ''); // strip version nibble marker context
+      var timeHiFull = hex.slice(12, 16);
+      var timeHiClock = (parseInt(timeHiFull, 16) & 0x0fff).toString(16).padStart(3, '0');
+      var full = timeHiClock + timeMid + timeLow;
+      var ts100ns = BigInt('0x' + full);
+      var GREGORIAN_OFFSET = 0x01b21dd213814000n;
+      var unix100ns = ts100ns - GREGORIAN_OFFSET;
+      var ms = Number(unix100ns / 10000n);
+      if (!isFinite(ms) || ms < 0) return null;
+      return new Date(ms);
+    }
+
+    function decodeV7(hex) {
+      var msHex = hex.slice(0, 12);
+      var ms = parseInt(msHex, 16);
+      if (!isFinite(ms)) return null;
+      return new Date(ms);
+    }
+
+    function inspect() {
+      var raw = input.value;
+      if (!raw.trim()) { SDEUtils.toast('Paste a UUID first', 'info'); resultEl.innerHTML = ''; return; }
+      var parsed = parse(raw);
+      if (!parsed) { SDEUtils.toast('That is not a valid UUID format', 'error'); resultEl.innerHTML = ''; return; }
+
+      var hex = parsed.hex;
+      var version = parseInt(hex[12], 16);
+      var variant = variantOf(hex);
+      var rows = [
+        ['Formatted', parsed.formatted],
+        ['Version', hex === '00000000000000000000000000000000' ? 'Nil UUID' : ('v' + version)],
+        ['Variant', variant],
+        ['Raw hex', hex]
+      ];
+
+      if (version === 1) {
+        var d1 = decodeV1(hex);
+        rows.push(['Embedded timestamp (v1, Gregorian epoch)', d1 ? d1.toISOString() : 'unable to decode']);
+      } else if (version === 7) {
+        var d7 = decodeV7(hex);
+        rows.push(['Embedded timestamp (v7, unix ms)', d7 ? d7.toISOString() : 'unable to decode']);
+      } else if (version === 4) {
+        rows.push(['Note', 'v4 is fully random — no embedded timestamp']);
+      }
+
+      resultEl.innerHTML = '';
+      var panel = el('div', {});
+      rows.forEach(function (r) {
+        panel.appendChild(el('div', { class: 'ui-row' }, [
+          el('span', { class: 'ui-k', text: r[0] }),
+          el('span', { class: 'ui-v', text: r[1] })
+        ]));
+      });
+      resultEl.appendChild(panel);
+    }
+
+    var actions = {
+      inspect: inspect,
+      sample: function () {
+        var b = crypto.getRandomValues(new Uint8Array(16));
+        var ts = Date.now();
+        b[0] = (ts / 2**40) & 0xff; b[1] = (ts / 2**32) & 0xff; b[2] = (ts / 2**24) & 0xff;
+        b[3] = (ts / 2**16) & 0xff; b[4] = (ts / 2**8) & 0xff; b[5] = ts & 0xff;
+        b[6] = (b[6] & 0x0f) | 0x70; b[8] = (b[8] & 0x3f) | 0x80;
+        var h = Array.prototype.map.call(b, function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+        input.value = h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);
+        inspect();
+      },
+      clear: function () { input.value = ''; resultEl.innerHTML = ''; }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+    SDEUtils.on(input, 'keydown', function (e) { if (e.key === 'Enter') inspect(); });
+  };
+</script>

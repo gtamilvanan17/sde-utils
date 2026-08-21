@@ -1,0 +1,154 @@
+<!-- =========================================================================
+     SDE Utils — tools/time-zone-converter.html
+     Convert a date/time from a source timezone into several common zones.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-globe"></i></div>
+  <div class="tool-header-text">
+    <h1>Time Zone Converter</h1>
+    <p>Pick a date/time and a source time zone, then see the equivalent moment across common time zones — powered by Intl.DateTimeFormat.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="tool-split">
+    <div class="field">
+      <label class="field-label" for="tz-date">Date &amp; time</label>
+      <input type="datetime-local" id="tz-date" class="input-sde-utils" step="1">
+    </div>
+    <div class="field">
+      <label class="field-label" for="tz-source">Source time zone</label>
+      <select id="tz-source" class="select-sde-utils"></select>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-primary" data-act="now"><i class="bi bi-clock-history"></i> Use now</button>
+  </div>
+
+  <div class="field">
+    <label class="field-label">Converted times</label>
+    <ul class="result-list" id="tz-results"></ul>
+  </div>
+</div>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['time-zone-converter'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, el = SDEUtils.el;
+
+    var dateEl = $('#tz-date', root);
+    var sourceEl = $('#tz-source', root);
+    var resultsEl = $('#tz-results', root);
+
+    var ZONES = [
+      'UTC', 'America/Los_Angeles', 'America/Denver', 'America/Chicago', 'America/New_York',
+      'America/Sao_Paulo', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
+      'Africa/Cairo', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Dhaka', 'Asia/Bangkok',
+      'Asia/Singapore', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul', 'Australia/Sydney',
+      'Pacific/Auckland'
+    ];
+
+    var browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+    function populateSource() {
+      var all = Array.from(new Set([browserTz].concat(ZONES)));
+      all.forEach(function (z) {
+        sourceEl.appendChild(el('option', { value: z, text: z + (z === browserTz ? ' (your local zone)' : '') }));
+      });
+      sourceEl.value = browserTz;
+    }
+
+    function toLocalInputValue(d) {
+      var pad = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' +
+        pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    // Get the UTC offset (in minutes) of a given IANA zone at a given instant.
+    function offsetMinutesAt(zone, date) {
+      var dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone, hourCycle: 'h23',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      var parts = dtf.formatToParts(date).reduce(function (acc, p) { acc[p.type] = p.value; return acc; }, {});
+      var asUTC = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+      return (asUTC - date.getTime()) / 60000;
+    }
+
+    // Interpret "wall clock time in `zone`" as an absolute instant (UTC ms).
+    function zonedTimeToUtc(wallDate, zone) {
+      // First guess: treat wall time as UTC, then correct using the zone's offset at that guess.
+      var guessUtc = Date.UTC(
+        wallDate.getFullYear(), wallDate.getMonth(), wallDate.getDate(),
+        wallDate.getHours(), wallDate.getMinutes(), wallDate.getSeconds()
+      );
+      var offset = offsetMinutesAt(zone, new Date(guessUtc));
+      var utc = guessUtc - offset * 60000;
+      // Re-check once more in case of DST edge (offset changes near the transition)
+      var offset2 = offsetMinutesAt(zone, new Date(utc));
+      if (offset2 !== offset) utc = guessUtc - offset2 * 60000;
+      return new Date(utc);
+    }
+
+    function formatInZone(instant, zone) {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: zone, weekday: 'short', year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+      }).format(instant);
+    }
+
+    function offsetLabel(zone, instant) {
+      var mins = offsetMinutesAt(zone, instant);
+      var sign = mins >= 0 ? '+' : '-';
+      var abs = Math.abs(mins);
+      var h = Math.floor(abs / 60), m = abs % 60;
+      return 'UTC' + sign + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+    }
+
+    function render() {
+      if (!dateEl.value) { SDEUtils.toast('Pick a date and time first', 'info'); return; }
+      var wall = new Date(dateEl.value);
+      if (isNaN(wall.getTime())) { SDEUtils.toast('Invalid date/time', 'error'); return; }
+
+      var zone = sourceEl.value;
+      var instant;
+      try {
+        instant = zonedTimeToUtc(wall, zone);
+      } catch (e) {
+        SDEUtils.toast('Could not resolve that time zone', 'error');
+        return;
+      }
+
+      resultsEl.innerHTML = '';
+      var displayZones = Array.from(new Set([zone].concat(ZONES)));
+      displayZones.forEach(function (z) {
+        var text = formatInZone(instant, z) + '  (' + offsetLabel(z, instant) + ')';
+        var li = el('li', {}, [
+          el('i', { class: 'bi ' + (z === zone ? 'bi-star-fill' : 'bi-clock'), style: 'color:var(--accent)' }),
+          el('span', { text: z + ' — ' + text }),
+          el('button', {
+            class: 'copy-inline', type: 'button', title: 'Copy',
+            onclick: function () { SDEUtils.copy(z + ': ' + text); }
+          }, [ el('i', { class: 'bi bi-clipboard' }) ])
+        ]);
+        resultsEl.appendChild(li);
+      });
+    }
+
+    var actions = {
+      now: function () { dateEl.value = toLocalInputValue(new Date()); sourceEl.value = browserTz; render(); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+    SDEUtils.on(dateEl, 'change', render);
+    SDEUtils.on(sourceEl, 'change', render);
+
+    populateSource();
+    actions.now();
+  };
+</script>

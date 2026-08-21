@@ -1,0 +1,120 @@
+<!-- =========================================================================
+     SDE Utils — tools/gradient-generator.html
+     Craft CSS linear & radial gradients with 2+ color stops, live preview.
+     ========================================================================= -->
+
+<div class="tool-header">
+  <div class="tool-header-icon"><i class="bi bi-paint-bucket"></i></div>
+  <div class="tool-header-text">
+    <h1>Gradient Generator</h1>
+    <p>Craft CSS linear and radial gradients with multiple color stops, angle control and a live preview.</p>
+  </div>
+</div>
+
+<div class="tool-card-panel">
+  <div class="seg" role="tablist" aria-label="Gradient type">
+    <button class="seg-btn is-active" data-type="linear" role="tab"><i class="bi bi-arrow-down-right"></i> Linear</button>
+    <button class="seg-btn" data-type="radial" role="tab"><i class="bi bi-circle"></i> Radial</button>
+  </div>
+
+  <div class="toolbar" id="gg-angle-row">
+    <label class="field-label" for="gg-angle" style="margin:0 var(--sp-2) 0 0">Angle: <strong id="gg-angleval">90</strong>°</label>
+    <input type="range" id="gg-angle" min="0" max="360" value="90" style="flex:1; accent-color:var(--accent);">
+  </div>
+
+  <div class="field">
+    <label class="field-label">Color stops</label>
+    <div id="gg-stops"></div>
+    <button class="btn-sde-utils btn-sde-utils-ghost btn-sde-utils-sm" data-act="addstop"><i class="bi bi-plus-lg"></i> Add stop</button>
+  </div>
+
+  <div id="gg-preview" class="gg-preview"></div>
+
+  <div class="field">
+    <label class="field-label" for="gg-output">CSS</label>
+    <textarea id="gg-output" class="textarea-sde-utils" style="min-height:70px" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn-sde-utils btn-sde-utils-success" data-act="copy"><i class="bi bi-clipboard-check"></i> Copy CSS</button>
+  </div>
+</div>
+
+<style>
+  .gg-preview { height:160px; border-radius:var(--radius-md); border:1px solid var(--border); margin:var(--sp-4) 0; }
+  .gg-stop { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-2); }
+  .gg-stop input[type=color] { width:40px; height:36px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; cursor:pointer; }
+  .gg-stop input[type=range] { flex:1; accent-color:var(--accent); }
+  .gg-stop .gg-pct { width:44px; text-align:right; font-size:var(--fs-sm); color:var(--text-muted); }
+</style>
+
+<script>
+  window.SDEUtilsTools = window.SDEUtilsTools || {};
+  window.SDEUtilsTools['gradient-generator'] = function (root, tool, SDEUtils) {
+    'use strict';
+    var $ = SDEUtils.$, $$ = SDEUtils.$$, el = SDEUtils.el;
+
+    var stopsEl = $('#gg-stops', root);
+    var preview = $('#gg-preview', root);
+    var output = $('#gg-output', root);
+    var angleEl = $('#gg-angle', root);
+    var angleVal = $('#gg-angleval', root);
+    var angleRow = $('#gg-angle-row', root);
+    var type = 'linear';
+
+    function addStop(color, pct) {
+      var row = el('div', { class: 'gg-stop' }, [
+        el('input', { type: 'color', value: color }),
+        el('input', { type: 'range', min: '0', max: '100', value: String(pct) }),
+        el('span', { class: 'gg-pct', text: pct + '%' }),
+        el('button', {
+          class: 'icon-btn', type: 'button', title: 'Remove',
+          onclick: function () { if ($$('.gg-stop', stopsEl).length > 2) { row.remove(); render(); } else { SDEUtils.toast('At least 2 stops required', 'info'); } }
+        }, [ el('i', { class: 'bi bi-trash' }) ])
+      ]);
+      stopsEl.appendChild(row);
+      var colorInput = row.children[0], rangeInput = row.children[1], pctLabel = row.children[2];
+      SDEUtils.on(colorInput, 'input', render);
+      SDEUtils.on(rangeInput, 'input', function () { pctLabel.textContent = rangeInput.value + '%'; render(); });
+      return row;
+    }
+
+    function buildCss() {
+      var stops = $$('.gg-stop', stopsEl).map(function (row) {
+        return { color: row.children[0].value, pct: parseInt(row.children[1].value, 10) };
+      }).sort(function (a,b) { return a.pct - b.pct; });
+      var stopStr = stops.map(function (s) { return s.color + ' ' + s.pct + '%'; }).join(', ');
+      if (type === 'linear') {
+        return 'linear-gradient(' + angleEl.value + 'deg, ' + stopStr + ')';
+      }
+      return 'radial-gradient(circle, ' + stopStr + ')';
+    }
+
+    function render() {
+      var css = buildCss();
+      preview.style.background = css;
+      output.value = 'background: ' + css + ';';
+    }
+
+    var actions = {
+      addstop: function () { addStop('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6,'0'), 50); render(); },
+      copy: function () { output.value ? SDEUtils.copy(output.value) : SDEUtils.toast('Nothing to copy', 'info'); }
+    };
+    SDEUtils.on(root, 'click', '[data-act]', function (e, node) {
+      var fn = actions[node.dataset.act]; if (fn) fn();
+    });
+
+    SDEUtils.on(root, 'click', '.seg-btn', function (e, node) {
+      type = node.dataset.type;
+      $$('.seg-btn', root).forEach(function (b) { b.classList.toggle('is-active', b === node); });
+      angleRow.style.display = type === 'linear' ? '' : 'none';
+      render();
+    });
+
+    SDEUtils.on(angleEl, 'input', function () { angleVal.textContent = angleEl.value; render(); });
+
+    addStop('#3b82f6', 0);
+    addStop('#8b5cf6', 100);
+    render();
+  };
+</script>
