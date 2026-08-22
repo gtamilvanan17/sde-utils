@@ -1,0 +1,11 @@
+# Code owners are auto-requested as reviewers when a PR touches matching
+# paths — but only once branch protection has "Require review from Code
+# Owners" enabled (see README.md → Repository Setup Guide). Replace
+# @gtamilvanan17 below with additional maintainers as the project grows.
+
+*                           @gtamilvanan17
+/tools/                     @gtamilvanan17
+/assets/                    @gtamilvanan17
+/.github/                   @gtamilvanan17
+/Dockerfile                 @gtamilvanan17
+/render.yaml                @gtamilvanan17

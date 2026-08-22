@@ -68,6 +68,14 @@ No framework, bundler, database, or backend server is required.
 
 ```text
 sde-utils/
+  .github/
+    workflows/          # CI, Docker build, Render PR previews, bots
+    ISSUE_TEMPLATE/
+    CODEOWNERS
+    PULL_REQUEST_TEMPLATE.md
+    labels.yml
+    labeler.yml
+    dependabot.yml
   assets/
     css/
       components.css
@@ -82,14 +90,21 @@ sde-utils/
       utils.js
   data/
     tools.json
+  deploy/
+    nginx.conf.template
   tools/
     base64.html
     case-converter.html
     json-formatter.html
     ...
+  Dockerfile
+  render.yaml
   doc.html
   index.html
   json-escape.html
+  CONTRIBUTING.md
+  CODE_OF_CONDUCT.md
+  SECURITY.md
   README.md
 ```
 
@@ -108,6 +123,36 @@ http://localhost:8080
 ```
 
 You can also use any static server, such as VS Code Live Server, `npx serve`, or a normal web hosting platform.
+
+## Deployment
+
+### Docker
+
+A `Dockerfile` serves the site with nginx, listening on the `$PORT` env var
+(defaults to `8080`) so the same image works on Render, Fly.io, Railway, or
+plain Docker/Kubernetes.
+
+```bash
+docker build -t sde-utils .
+docker run -p 8080:8080 -e PORT=8080 sde-utils
+```
+
+Open `http://localhost:8080`.
+
+### Render (free tier)
+
+This repo includes a [`render.yaml`](render.yaml) Blueprint:
+
+1. On [Render](https://render.com), click **New → Blueprint** and connect
+   this repository.
+2. Render reads `render.yaml` and provisions a free Docker web service
+   automatically (no manual config needed).
+3. Free-tier services spin down after 15 minutes idle and cold-start
+   (~30-60s) on the next request — that's expected on the free plan.
+
+Every pull request also gets its own temporary Render preview
+deployment — see [Continuous Integration & Bots](#continuous-integration--bots)
+below.
 
 ## How To Use The Application
 
@@ -383,6 +428,30 @@ Example registry entry:
 }
 ```
 
+## Continuous Integration & Bots
+
+Everything under `.github/` is wired up so the project runs itself day to
+day:
+
+| Workflow | What it does |
+| --- | --- |
+| `ci.yml` | Syntax-checks every JS file, validates `data/tools.json`, and builds + smoke-tests the Docker image on every push/PR. |
+| `pr-preview.yml` / `pr-preview-cleanup.yml` | Spins up a dedicated, temporary Render service per PR and comments the preview URL; destroys it when the PR closes. |
+| `labeler.yml` + `.github/labeler.yml` | Auto-labels PRs by which paths they touch (`tool-content`, `ui`, `ci`, `docker`, `documentation`, ...). |
+| `label-sync.yml` + `.github/labels.yml` | Keeps the repo's label set in sync with a single source-of-truth file. |
+| `pr-title-lint.yml` | Enforces [Conventional Commit](https://www.conventionalcommits.org/) PR titles. |
+| `stale.yml` | Marks inactive issues/PRs stale after 45 days, closes them 7 days later (exempt: `priority: high`, `status: blocked`). |
+| `greetings.yml` | Welcomes first-time issue/PR authors. |
+| `auto-assign.yml` | Assigns the PR author automatically for tracking. |
+| `dependabot.yml` | Weekly PRs to bump GitHub Actions versions and the Docker base image. |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide (local dev, how
+to add a new tool, PR conventions). Please also read the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security issues should go through
+[SECURITY.md](SECURITY.md), not a public issue.
+
 ## Privacy
 
 SDE Utils is designed to process data in the browser. For most tools, input is not sent to a server. This makes the app suitable for working with local snippets, API payloads, logs, tokens, and configuration data.
@@ -399,6 +468,98 @@ If a future tool needs network access, it should clearly explain that behavior b
 - Add offline/PWA support.
 - Add automated tests for shared helpers and complex tools.
 - Add deployment instructions for static hosting.
+
+## Repository Setup Guide (Maintainers)
+
+The workflows in `.github/` do most of the work, but a handful of things
+can only be configured in the GitHub UI (or via `gh`/API) — not from a file
+in the repo. Do these once after enabling this setup on
+`github.com/gtamilvanan17/sde-utils`:
+
+### 1. Add secrets (required for the Render PR-preview workflows)
+
+Settings → Secrets and variables → Actions → **New repository secret**:
+
+| Secret | Value |
+| --- | --- |
+| `RENDER_API_KEY` | Render dashboard → Account Settings → API Keys → Create API Key |
+| `RENDER_OWNER_ID` | `curl -H "Authorization: Bearer <key>" https://api.render.com/v1/owners` → copy the `id` |
+
+Without these, `pr-preview.yml` / `pr-preview-cleanup.yml` will fail — the
+rest of CI (validation, Docker build) doesn't need any secrets.
+
+Equivalent via the CLI:
+
+```bash
+gh secret set RENDER_API_KEY --body "rnd_xxx"
+gh secret set RENDER_OWNER_ID --body "usr-xxx"
+```
+
+### 2. Sync labels once
+
+The `label-sync.yml` workflow only triggers on pushes to `master` that touch
+`.github/labels.yml`. To seed labels the first time (or after cloning this
+setup into a fresh repo), trigger it manually:
+
+```bash
+gh workflow run "Sync labels"
+```
+
+### 3. Branch protection on `master`
+
+Settings → Branches → **Add branch protection rule** → branch name pattern
+`master`:
+
+- [x] Require a pull request before merging
+  - [x] Require approvals: **1**
+  - [x] Require review from Code Owners (uses `.github/CODEOWNERS`)
+  - [x] Dismiss stale approvals when new commits are pushed
+- [x] Require status checks to pass before merging
+  - Search and select: `Validate JS & tool registry`, `Docker build test`,
+    `amannn/action-semantic-pull-request` (PR title lint)
+  - [x] Require branches to be up to date before merging
+- [x] Require conversation resolution before merging
+- [x] Do not allow bypassing the above settings (include administrators)
+- [ ] Allow force pushes — leave unchecked
+- [ ] Allow deletions — leave unchecked
+
+Equivalent via the CLI (adjust check names if you rename jobs):
+
+```bash
+gh api -X PUT repos/gtamilvanan17/sde-utils/branches/master/protection \
+  -F required_status_checks[strict]=true \
+  -F required_status_checks[contexts][]='Validate JS & tool registry' \
+  -F required_status_checks[contexts][]='Docker build test' \
+  -F enforce_admins=true \
+  -F required_pull_request_reviews[required_approving_review_count]=1 \
+  -F required_pull_request_reviews[require_code_owner_reviews]=true \
+  -F restrictions=null
+```
+
+### 4. General repo settings worth enabling
+
+Settings → General:
+
+- **Pull Requests**: enable "Allow squash merging" only (keeps history
+  linear and matches the Conventional Commit PR titles); enable
+  "Automatically delete head branches" (keeps merged PR branches from
+  piling up — the Render preview cleanup runs off `pull_request: closed`,
+  which fires regardless of whether the branch is deleted).
+- **Features**: enable Issues and Discussions; enable "Preserve this
+  repository" is optional.
+
+### 5. Topics & description (discoverability)
+
+Add repo topics (gear icon next to "About" on the repo homepage): `developer-tools`,
+`utilities`, `static-site`, `javascript`, `docker`, `render`. Set the
+description and the live-site URL in the same panel.
+
+### 6. Assignee/reviewer routing
+
+`.github/CODEOWNERS` currently routes everything to a single maintainer.
+As more maintainers join, split it by path (e.g. `/tools/colors-*.html @teammate`)
+so review load spreads out — CODEOWNERS-based review requests only fire
+once step 3's "Require review from Code Owners" is enabled.
 
 ## License
 

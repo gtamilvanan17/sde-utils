@@ -1,0 +1,27 @@
+name: Feature / new tool request
+description: Suggest a new tool or an improvement to an existing one
+labels: ["enhancement", "status: needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that's currently hard or impossible?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed tool / change
+      description: If this is a new tool, describe its inputs, outputs, and category.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Fits the project's constraints
+      options:
+        - label: Can run entirely client-side (no server, no network calls, no telemetry)
+          required: true

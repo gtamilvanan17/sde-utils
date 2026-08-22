@@ -1,0 +1,33 @@
+name: Stale bot
+
+# Nudges inactive issues/PRs, then closes them if still untouched.
+# Anything labeled "status: blocked" or "priority: high" is exempt.
+on:
+  schedule:
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 45
+          days-before-close: 7
+          exempt-issue-labels: "status: blocked,priority: high,good first issue"
+          exempt-pr-labels: "status: blocked,priority: high"
+          stale-issue-label: "stale"
+          stale-pr-label: "stale"
+          stale-issue-message: >
+            This issue has had no activity for 45 days and will be closed in 7 days
+            if nothing changes. Comment to keep it open.
+          stale-pr-message: >
+            This PR has had no activity for 45 days and will be closed in 7 days
+            if nothing changes. Rebase or comment to keep it open.
+          close-issue-message: "Closing due to inactivity. Feel free to reopen if this is still relevant."
+          close-pr-message: "Closing due to inactivity. Feel free to reopen or resubmit."

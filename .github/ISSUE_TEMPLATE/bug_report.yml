@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in SDE Utils isn't working
+labels: ["bug", "status: needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug!
+
+  - type: input
+    id: tool
+    attributes:
+      label: Which tool / page?
+      placeholder: "e.g. JSON Formatter, Cron Parser, homepage"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Paste/enter ...
+        3. Click ...
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser & OS
+      placeholder: "e.g. Chrome 128 on macOS 15"
+    validations:
+      required: false

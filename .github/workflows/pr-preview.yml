@@ -1,0 +1,121 @@
+name: PR Preview (Render)
+
+# Spins up a dedicated, temporary Render web service for each PR so
+# reviewers get a real preview URL, and posts/updates a sticky comment
+# with the link. Companion workflow: pr-preview-cleanup.yml tears it down
+# when the PR closes/merges.
+#
+# Requires repo secrets:
+#   RENDER_API_KEY   — a Render API key (https://dashboard.render.com/u/settings#api-keys)
+#   RENDER_OWNER_ID  — your Render workspace/owner id (Render dashboard URL
+#                      or `GET https://api.render.com/v1/owners`)
+#
+# NOTE: Render's API is versioned and evolves — verify field names against
+# https://api-docs.render.com before relying on this in production. This
+# workflow is a correct-shape starting point, not a guarantee of forward
+# compatibility with Render's API.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look up existing preview service
+        id: lookup
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_NAME: sde-utils-pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          resp=$(curl -sf -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/services?name=${SERVICE_NAME}&limit=1")
+          id=$(echo "$resp" | jq -r '.[0].service.id // empty')
+          echo "service_id=${id}" >> "$GITHUB_OUTPUT"
+
+      - name: Create preview service (first push only)
+        if: steps.lookup.outputs.service_id == ''
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+          SERVICE_NAME: sde-utils-pr-${{ github.event.pull_request.number }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "https://api.render.com/v1/services" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @- <<JSON
+          {
+            "type": "web_service",
+            "name": "${SERVICE_NAME}",
+            "ownerId": "${RENDER_OWNER_ID}",
+            "repo": "${REPO_URL}",
+            "branch": "${BRANCH}",
+            "autoDeploy": "yes",
+            "serviceDetails": {
+              "env": "docker",
+              "plan": "free",
+              "region": "oregon",
+              "envSpecificDetails": {
+                "dockerfilePath": "./Dockerfile",
+                "dockerContext": "."
+              },
+              "envVars": [{ "key": "PORT", "value": "8080" }]
+            }
+          }
+          JSON
+          echo "Created ${SERVICE_NAME}; Render will build from branch ${BRANCH}."
+
+      - name: Trigger a deploy (subsequent pushes)
+        if: steps.lookup.outputs.service_id != ''
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ steps.lookup.outputs.service_id }}
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" -d '{"clearCache":"do_not_clear"}'
+
+      - name: Wait for the service to report a URL
+        id: wait
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_NAME: sde-utils-pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          url=""
+          for i in $(seq 1 30); do
+            resp=$(curl -sf -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              "https://api.render.com/v1/services?name=${SERVICE_NAME}&limit=1")
+            url=$(echo "$resp" | jq -r '.[0].service.serviceDetails.url // empty')
+            [ -n "$url" ] && break
+            sleep 10
+          done
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          if [ -n "$url" ]; then
+            echo "message=Preview: ${url}" >> "$GITHUB_OUTPUT"
+          else
+            echo "message=Service created — Render is still building the first deploy. Check the Render dashboard (https://dashboard.render.com) in a few minutes for the URL." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment preview URL on the PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: render-preview
+          message: |
+            🔵 **Render preview for this PR**
+
+            ${{ steps.wait.outputs.message }}
+
+            This environment is destroyed automatically when the PR is closed or merged.

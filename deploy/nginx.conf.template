@@ -1,0 +1,37 @@
+# Rendered via envsubst by the official nginx entrypoint at container
+# start (files under /etc/nginx/templates/*.template -> /etc/nginx/conf.d/,
+# with $PORT and other ${VAR} references substituted). This is what lets
+# the same image bind to whatever port Render (or any other PaaS) assigns.
+server {
+    listen       ${PORT};
+    server_name  _;
+    root         /usr/share/nginx/html;
+    index        index.html;
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 512;
+
+    # Static site — hash-based routing lives entirely client-side, so every
+    # path just serves index.html and let assets/js/router.js take over.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Long-cache hashed/static assets; HTML stays revalidate-on-load.
+    location ~* \.(?:css|js|svg|png|jpg|jpeg|gif|ico|woff2?)$ {
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800, immutable";
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Basic hardening headers.
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    error_page 404 /index.html;
+}

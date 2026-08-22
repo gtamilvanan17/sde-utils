@@ -1,0 +1,27 @@
+name: Greet first-time contributors
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: >
+            Thanks for opening your first issue in SDE Utils! A maintainer will
+            triage it soon. In the meantime, see CONTRIBUTING.md for how the
+            project is organized.
+          pr-message: >
+            Thanks for your first pull request to SDE Utils! Please make sure
+            the PR checklist in the template is filled out — CI (validation,
+            Docker build, and a Render preview) will run automatically.

@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # Keep GitHub Actions versions (actions/checkout@v4, etc.) current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "ci"
+
+  # Keep the base image in Dockerfile current.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "docker"

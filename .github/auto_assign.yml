@@ -1,0 +1,13 @@
+# Config for kentaro-m/auto-assign-action (.github/workflows/auto-assign.yml).
+addAssignees: author
+
+# Reviewers are pulled from CODEOWNERS in most repos; list explicit
+# fallback usernames here if you want auto-assign to also request review
+# from people not covered by CODEOWNERS. Leave empty to rely on CODEOWNERS +
+# branch protection's "require review from Code Owners" alone.
+addReviewers: false
+reviewers: []
+
+skipKeywords:
+  - wip
+  - draft

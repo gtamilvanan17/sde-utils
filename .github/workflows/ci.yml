@@ -1,0 +1,85 @@
+name: CI
+
+# Sanity checks for a no-build static site: every JS file must parse,
+# tools.json must be valid and internally consistent, and the Docker
+# image used for deployment must actually build.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate JS & tool registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check every JS file
+        run: |
+          set -e
+          find assets/js -name '*.js' -print0 | xargs -0 -n1 node --check
+          echo "All JS files parse cleanly."
+
+      - name: Validate data/tools.json
+        run: |
+          python3 - <<'PY'
+          import json, sys, os
+
+          with open("data/tools.json") as f:
+              data = json.load(f)
+
+          tools = data["tools"]
+          categories = {c["id"] for c in data["categories"]}
+          ids = [t["id"] for t in tools]
+
+          errors = []
+          if len(ids) != len(set(ids)):
+              dupes = {i for i in ids if ids.count(i) > 1}
+              errors.append(f"Duplicate tool ids: {dupes}")
+
+          for t in tools:
+              if t["category"] not in categories:
+                  errors.append(f"{t['id']}: unknown category '{t['category']}'")
+              if t["status"] == "ready" and not os.path.exists(f"tools/{t['id']}.html"):
+                  errors.append(f"{t['id']}: status=ready but tools/{t['id']}.html is missing")
+
+          if errors:
+              print("tools.json validation failed:")
+              for e in errors:
+                  print(" -", e)
+              sys.exit(1)
+
+          print(f"tools.json OK — {len(tools)} tools, {len(categories)} categories.")
+          PY
+
+  docker-build:
+    name: Docker build test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: sde-utils:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test the container
+        run: |
+          docker run -d --name sde-utils-ci -p 8080:8080 -e PORT=8080 sde-utils:ci
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8080/ > /dev/null; then echo "Container is serving."; exit 0; fi
+            sleep 1
+          done
+          echo "Container never became healthy" && docker logs sde-utils-ci && exit 1

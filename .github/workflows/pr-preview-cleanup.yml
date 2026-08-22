@@ -1,0 +1,46 @@
+name: PR Preview Cleanup (Render)
+
+# Deletes the temporary Render service created by pr-preview.yml once the
+# PR is closed (merged or not) — free-tier services are limited, so
+# previews must not linger.
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  destroy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find the preview service
+        id: lookup
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_NAME: sde-utils-pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          resp=$(curl -sf -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/services?name=${SERVICE_NAME}&limit=1")
+          id=$(echo "$resp" | jq -r '.[0].service.id // empty')
+          echo "service_id=${id}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete the service
+        if: steps.lookup.outputs.service_id != ''
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ steps.lookup.outputs.service_id }}
+        run: |
+          curl -sf -X DELETE "https://api.render.com/v1/services/${SERVICE_ID}" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}"
+          echo "Deleted preview service ${SERVICE_ID}."
+
+      - name: Update the preview comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: render-preview
+          message: |
+            🔵 **Render preview for this PR**
+
+            This preview environment has been destroyed since the PR is now closed.
