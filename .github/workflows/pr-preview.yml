@@ -110,7 +110,7 @@ jobs:
           fi
 
       - name: Comment preview URL on the PR
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: render-preview
           message: |

@@ -37,7 +37,7 @@ jobs:
           echo "Deleted preview service ${SERVICE_ID}."
 
       - name: Update the preview comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: render-preview
           message: |
