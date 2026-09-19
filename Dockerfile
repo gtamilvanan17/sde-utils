@@ -2,7 +2,7 @@
 # No build step: this is plain HTML/CSS/JS, so the image just serves the
 # repo root with nginx. Works on Render (Docker web service), Fly.io,
 # Railway, plain Docker/K8s, etc.
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 
 # Render (and most PaaS) inject a dynamic $PORT at runtime instead of a
 # fixed port, so the nginx config is a template rendered at container
